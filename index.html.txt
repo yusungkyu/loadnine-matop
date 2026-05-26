@@ -397,7 +397,7 @@ body {
 
     <div class="board-wrap">
         <div class="image-wrap" id="imageWrap">
-            <img id="bgImage" src="./1.png" alt="1층 배경">
+            <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="1층 배경">
             <div class="pin-layer" id="pinLayer"></div>
         </div>
     </div>
@@ -504,8 +504,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const PROFILE_TABLE = 'tower_profile';
 
     const BOARDS = [
-        { id: 'floor1', name: '1층', image: './1.png' },
-        { id: 'floor2', name: '2층', image: './2.png' }
+        { id: 'floor1', name: '1층', image: 'https://i.ibb.co/0RST75vn/1.png' },
+        { id: 'floor2', name: '2층', image: 'https://i.ibb.co/MD9V69Vm/2.png' }
     ];
 
     const avatarText = document.getElementById('avatarText');
