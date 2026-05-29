@@ -492,7 +492,7 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co/rest/v1/';
+    const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co/';
     const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
     
     const isMatopSite = window.location.hostname.includes('matop');
