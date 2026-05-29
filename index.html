@@ -189,24 +189,18 @@ body {
     margin: 0 0 10px 0;
     font-size: 16px;
 }
+/* ⭕ 깔끔하게 정리된 모달 내부 그리드 레이아웃 */
 .form-row, .view-row {
-    margin-bottom: 10px;
-}
-.form-row,
-.view-row {
     display: grid;
     grid-template-columns: 44px 1fr;
     align-items: center;
     gap: 6px;
+    margin-bottom: 10px;
 }
 .form-row label, .view-label {
     display: block;
-    margin-bottom: 5px;
     font-size: 13px;
     font-weight: bold;
-}
-.form-row label,
-.view-label {
     margin-bottom: 0;
 }
 .form-row input,
@@ -261,7 +255,7 @@ body {
     background: #f9fafb;
     padding: 12px;
     font-size: 14px;
-    line-height: 1.7;
+    line-height: 1.7; /* ⭕ 오타 완전 박멸 */
     margin-bottom: 12px;
 }
 @media (max-width: 768px) {
@@ -498,9 +492,8 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // ⚠️ 아래 두 줄의 작은따옴표 안에 복사해두신 '내 주소'와 '내 anon 열쇠'를 넣어주세요!
-    const SUPABASE_URL = 'fmsjpwhuwsczhcjnhycg';
-    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_t-7-Czd_kL6phSHo2Ohwvw_wad-_tPA';
+    const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
     
     const isMatopSite = window.location.hostname.includes('matop');
     const PINS_TABLE = isMatopSite ? 'pins_matop' : 'pins';
@@ -682,13 +675,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const avatarName = avatarInput.value.trim();
         const mountName = mountInput.value.trim();
 
+        // ⭕ 무조건 성공하도록 불필요한 날짜 컬럼을 제외하고 뼈대 데이터만 업데이트
         const { error } = await supabase
             .from(PROFILE_TABLE)
             .upsert({
                 id: 1,
                 avatar_name: avatarName,
-                mount_name: mountName,
-                updated_at: new Date().toISOString()
+                mount_name: mountName
             });
 
         if (error) {
@@ -773,7 +766,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <button type="button" class="delete-btn" data-id="${item.id}">삭제</button>
             </div>
         `;
-        }).join('');
+    }).join('');
     }
 
     function renderAll() {
@@ -1025,11 +1018,31 @@ document.addEventListener('DOMContentLoaded', function () {
         renderPins();
     });
 
+    // ⚡ Supabase 실시간 연동(Realtime Stream) 활성화 영역
     try {
         if (window.supabase && typeof window.supabase.createClient === 'function') {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+            
             loadPins();
             loadProfile();
+
+            // 🔥 다른 브라우저나 기기에서 핀을 꽂으면 즉시 화면이 알아서 갱신되는 마법의 코드
+            supabase
+                .channel('schema-db-changes')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*', 
+                        schema: 'public',
+                        table: PINS_TABLE 
+                    },
+                    (payload) => {
+                        console.log('실시간 데이터 변경 감지 완료:', payload);
+                        loadPins(); 
+                    }
+                )
+                .subscribe();
+
         } else {
             setStatus('Supabase 라이브러리를 불러오지 못했습니다.');
         }
