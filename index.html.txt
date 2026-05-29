@@ -500,7 +500,7 @@ body {
 document.addEventListener('DOMContentLoaded', function () {
     // ⚠️ 아래 두 줄의 작은따옴표 안에 복사해두신 '내 주소'와 '내 anon 열쇠'를 넣어주세요!
     const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg';
-    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_t-7-Czd_kL6phSHo2Ohwvw_wad-_tPA';
+    const SUPABASE_PUBLISHABLE_KEY = 'https://sb_publishable_t-7-Czd_kL6phSHo2Ohwvw_wad-_tPA';
     
     const isMatopSite = window.location.hostname.includes('matop');
     const PINS_TABLE = isMatopSite ? 'pins_matop' : 'pins';
