@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -375,7 +374,7 @@ body {
 </head>
 <body>
 <div class="page">
-    <div class="page-title">검은 마녀의 탑 위치 현황</div>
+    <div class="page-title" id="mainTitle">검은 마녀의 탑 위치 현황</div>
 
     <div class="profile-bar">
         <div class="profile-info">
@@ -501,8 +500,18 @@ body {
 document.addEventListener('DOMContentLoaded', function () {
     const SUPABASE_URL = 'https://kxvelqnyurevcmecbxko.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4oYpz9EbU-2A6sP88eLQCg_QdbefKVH';
-    const PINS_TABLE = 'pins';
-    const PROFILE_TABLE = 'tower_profile';
+    
+    // [수정 핵심 1] 접속 주소(URL)에 따라 Supabase 테이블명을 다르게 분기합니다.
+    // 주소에 'matop'이 포함되어 있으면 마력의 탑용 테이블, 없으면 기존 타워용 테이블을 사용합니다.
+    const isMatopSite = window.location.hostname.includes('matop');
+    const PINS_TABLE = isMatopSite ? 'pins_matop' : 'pins';
+    const PROFILE_TABLE = isMatopSite ? 'matop_profile' : 'tower_profile';
+
+    // UI 타이틀도 주소에 맞게 변경해줍니다.
+    const mainTitle = document.getElementById('mainTitle');
+    if (mainTitle) {
+        mainTitle.textContent = isMatopSite ? '마력의 탑 위치 현황' : '검은 마녀의 탑 위치 현황';
+    }
 
     const BOARDS = [
         { id: 'floor1', name: '1층', image: 'https://i.ibb.co/0RST75vn/1.png' },
@@ -565,7 +574,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .replaceAll("'", '&#39;');
     }
 
-
     function parsePinMeta(rawName) {
         const text = String(rawName || '').trim();
         const match = text.match(/^이름\s*:\s*(.*?)\s*\/\s*무기\s*:\s*(.*)$/);
@@ -602,7 +610,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return store[currentBoardId] || [];
     }
 
-
     function findPinByName(name) {
         const targetName = name.trim();
         for (const boardId in store) {
@@ -612,7 +619,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return null;
     }
-
 
     function renderProfile() {
         avatarText.textContent = profileInfo.avatar_name || '-';
@@ -718,6 +724,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderPins() {
         const rect = bgImage.getBoundingClientRect();
+        if (rect.width === 0) return; // 이미지가 아직 로드되지 않은 상태 방지
         pinLayer.innerHTML = '';
 
         getCurrentPins().forEach(item => {
@@ -879,8 +886,14 @@ document.addEventListener('DOMContentLoaded', function () {
         return true;
     }
 
+    // [수정 핵심 2] '오염 없는 삭제'를 위해 confirm 분기 시 실제 테이블과 동기화되도록 명시적 처리
     async function deletePin(pinId) {
-        const target = getCurrentPins().find(item => item.id === pinId);
+        // 전역 store 전체에서 핀을 탐색하도록 수정 (어느 모달/리스트 뷰에서 호출되든 대응 가능하도록 함)
+        let target = null;
+        for (const boardId in store) {
+            target = store[boardId].find(item => item.id === pinId);
+            if (target) break;
+        }
         if (!target) return false;
 
         const meta = parsePinMeta(target.name);
@@ -957,8 +970,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const deleted = await deletePin(duplicatedPin.id);
-            if (!deleted) {
+            // [수정 핵심 3] 중복된 핀을 완전히 삭제 처리한 후에 새 핀을 추가하도록 순서 동기화 보장
+            const { error: delError } = await supabase.from(PINS_TABLE).delete().eq('id', duplicatedPin.id);
+            if (delError) {
+                console.error(delError);
+                alert('기존 중복 핀을 삭제하지 못해 새 핀을 등록할 수 없습니다.');
                 return;
             }
         }
