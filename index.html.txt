@@ -10,268 +10,109 @@
         .container { max-width: 800px; margin: 0 auto; }
         .panel { border: 1px solid #333; padding: 15px; margin-bottom: 10px; background: #222; border-radius: 6px; }
         
-        /* 메인 리스트 컨테이너 */
-        #log-container { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 10px; 
-            min-height: 150px; 
-            padding: 10px 0;
+        /* 팝업 모달 스타일 */
+        #welcome-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;
         }
-
-        /* 드래그 가능한 아이템 고유 스타일 */
-        .witch-drag-item { 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: monospace; 
-            font-size: 0.95rem; 
-            color: #a3be8c; 
-            border: 1px solid #444;
-            background-color: #25282a;
-            border-radius: 6px;
-            padding: 14px; 
-            cursor: grab; 
-            touch-action: none; 
-            transition: background-color 0.2s, transform 0.1s;
-        }
+        .modal-content { background: #2a2a2a; padding: 30px; border-radius: 10px; border: 1px solid #ebcb8b; text-align: center; }
         
-        /* 드래그 중인 상태 */
-        .witch-drag-item.wt-dragging {
-            opacity: 0.3 !important;
-            border: 2px dashed #ebcb8b !important;
-            background-color: #3b4252 !important;
+        #log-container { display: flex; flex-direction: column; gap: 10px; min-height: 150px; }
+        .witch-drag-item { 
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: monospace; font-size: 0.95rem; color: #a3be8c; 
+            border: 1px solid #444; background-color: #25282a; border-radius: 6px; padding: 14px; 
+            cursor: grab; transition: background-color 0.2s;
         }
-
-        /* 텍스트 컨테이너 (글자 드래그 방지) */
-        .witch-item-content {
-            display: flex;
-            align-items: center;
-            pointer-events: none; 
-            user-select: none;
-        }
-
-        /* 핀 깜빡임 애니메이션 */
-        @keyframes forcePulse {
-            0% { opacity: 1; transform: scale(1.1); }
-            50% { opacity: 0.1; transform: scale(0.9); }
-            100% { opacity: 1; transform: scale(1.1); }
-        }
-
-        .witch-blink-pin {
-            display: inline-block;
-            margin-right: 12px;
-            font-size: 1.2rem;
-            animation: forcePulse 1.0s infinite ease-in-out !important; 
-        }
-
-        /* 원터치 즉시 삭제 버튼 */
-        .witch-delete-btn {
-            background-color: #bf616a;
-            color: white;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
+        .witch-drag-item.wt-dragging { opacity: 0.3 !important; border: 2px dashed #ebcb8b !important; }
+        .witch-item-content { display: flex; align-items: center; pointer-events: none; user-select: none; }
+        
+        @keyframes forcePulse { 0% { opacity: 1; transform: scale(1.1); } 50% { opacity: 0.1; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1.1); } }
+        .witch-blink-pin { display: inline-block; margin-right: 12px; font-size: 1.2rem; animation: forcePulse 1.0s infinite ease-in-out !important; }
+        
+        .witch-delete-btn { background-color: #bf616a; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
         .witch-delete-btn:hover { background-color: #d08770; }
     </style>
 </head>
 <body>
 
+<div id="welcome-modal">
+    <div class="modal-content">
+        <h2>🏰 검은마녀의탑 안내</h2>
+        <p id="modal-dresscode-info">데이터를 불러오는 중...</p>
+        <button onclick="document.getElementById('welcome-modal').style.display='none'" class="witch-delete-btn">확인</button>
+    </div>
+</div>
+
 <div class="container">
     <h2>🏰 검은마녀의탑 모니터링 대시보드</h2>
-    
-    <div class="panel">
-        <h3>📍 실시간 유저 깊이(Depth) 현황</h3>
-        <div id="user-depth-display"></div>
-    </div>
-
-    <div class="panel">
-        <h3>📜 실시간 트랜잭션 로그 (드래그 정렬 가능)</h3>
-        <div id="log-container"></div>
-    </div>
+    <div class="panel"><h3>📍 실시간 유저 깊이(Depth) 현황</h3><div id="user-depth-display"></div></div>
+    <div class="panel"><h3>📜 실시간 트랜잭션 로그</h3><div id="log-container"></div></div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    
-    // [필수] 본인의 실제 프로젝트 정보로 채워주세요
     const SUPABASE_URL = 'https://your-project-url.supabase.co';
     const SUPABASE_KEY = 'your-anon-key';
+    let supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let supabaseClient;
-
-    // 1. Supabase 클라이언트 초기화
-    try {
-        if (typeof supabase !== 'undefined') {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            initApp();
-        } else {
-            console.error('Supabase 라이브러리 로드 실패');
-        }
-    } catch (error) {
-        console.error('초기화 실패:', error.message);
-        return;
-    }
-
-    function initApp() {
-        fetchInitialData(); 
-        setupDragEngine(); 
-        
-        supabaseClient
-            .channel('witch-tower-changes')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'user_tracking' },
-                (payload) => {
-                    handleRealtimeUpdate(payload);
-                }
-            )
-            .subscribe();
-    }
-
-    // 2. 초기 데이터 호출
     async function fetchInitialData() {
-        try {
-            const { data, error } = await supabaseClient
-                .from('user_tracking')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
+        const { data, error } = await supabaseClient
+            .from('user_tracking')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-            if (error) throw error;
+        if (data && data.length > 0) {
+            // 팝업에 드레스코드 연동
+            document.getElementById('modal-dresscode-info').innerText = `최근 입장 유저의 드레스코드: ${data[0].dress_code || '미지정'}`;
             renderList(data);
-        } catch (err) {
-            console.error('데이터 로드 실패:', err.message);
+        } else {
+            document.getElementById('modal-dresscode-info').innerText = "현재 입장한 유저가 없습니다.";
         }
     }
 
     function renderList(items) {
         const logContainer = document.getElementById('log-container');
         logContainer.innerHTML = ''; 
-
-        if (!items || items.length === 0) return;
-        
-        items.forEach(item => {
-            const logItem = createLogElement(item);
-            logContainer.appendChild(logItem);
-        });
-        
-        if (items[0]) updateDepthDisplay(items[0]);
+        items.forEach(item => logContainer.appendChild(createLogElement(item)));
+        if (items[0]) document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth}m`;
     }
 
-    // 3. 📌 개별 행 엘리먼트 생성 (아바타/탈것 제거 -> 드레스코드 추가)
     function createLogElement(item) {
         const logItem = document.createElement('div');
         logItem.className = 'witch-drag-item'; 
-        logItem.id = `pin-${item.id}`; 
         logItem.draggable = true; 
-
+        logItem.id = `pin-${item.id}`;
+        
         logItem.addEventListener('dragstart', () => logItem.classList.add('wt-dragging'));
         logItem.addEventListener('dragend', () => logItem.classList.remove('wt-dragging'));
         
-        const contentWrap = document.createElement('div');
-        contentWrap.className = 'witch-item-content';
-
-        const pinSpan = document.createElement('span');
-        pinSpan.className = 'witch-blink-pin';
-        pinSpan.innerText = '📌';
-
-        // 📝 [수정 완료] 기존의 아바타, 탈것을 없애고 드레스코드를 출력하도록 명세를 변경했습니다.
-        // 만약 DB 컬럼명이 dress_code가 아니라면 item.원하는컬럼명 으로 바꿔주세요.
-        const dressCodeText = item.dress_code ? item.dress_code : '미지정';
-        
-        const textSpan = document.createElement('span');
-        textSpan.className = 'witch-text';
-        textSpan.innerText = `유저 ID: ${item.user_id} | 깊이: ${item.depth}m | 드레스코드: ${dressCodeText}`;
-        
-        contentWrap.appendChild(pinSpan);
-        contentWrap.appendChild(textSpan);
-        
-        // 원터치 즉시 삭제 버튼 (확인창 없음)
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'witch-delete-btn';
-        deleteBtn.innerText = '삭제';
-        
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation(); 
-            deletePinImmediately(item.id);
-        };
-
-        logItem.appendChild(contentWrap);
-        logItem.appendChild(deleteBtn);
+        const dressCodeText = item.dress_code || '미지정';
+        logItem.innerHTML = `
+            <div class="witch-item-content">
+                <span class="witch-blink-pin">📌</span>
+                <span class="witch-text">유저 ID: ${item.user_id} | 깊이: ${item.depth}m | 드레스코드: ${dressCodeText}</span>
+            </div>
+            <button class="witch-delete-btn" onclick="deleteItem('${item.id}')">삭제</button>
+        `;
         return logItem;
     }
 
-    // 4. 드래그 오버 정렬 엔진
-    function setupDragEngine() {
-        const logContainer = document.getElementById('log-container');
-        
-        logContainer.addEventListener('dragover', (e) => {
-            e.preventDefault(); 
-            const draggingItem = document.querySelector('.wt-dragging');
-            if (!draggingItem) return;
+    window.deleteItem = async (id) => {
+        await supabaseClient.from('user_tracking').delete().eq('id', id);
+    };
 
-            const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
-            const nextSibling = siblings.find(sibling => {
-                const box = sibling.getBoundingClientRect();
-                return e.clientY <= box.top + box.height / 2;
-            });
-            
-            if (nextSibling == null) {
-                logContainer.appendChild(draggingItem);
-            } else {
-                logContainer.insertBefore(draggingItem, nextSibling);
-            }
-        });
-    }
+    // 드래그 정렬 엔진
+    const logContainer = document.getElementById('log-container');
+    logContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const dragging = document.querySelector('.wt-dragging');
+        const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
+        const next = siblings.find(sib => e.clientY <= sib.getBoundingClientRect().top + sib.offsetHeight / 2);
+        logContainer.insertBefore(dragging, next);
+    });
 
-    // 5. Supabase 즉시 삭제 기능
-    async function deletePinImmediately(id) {
-        try {
-            const { error } = await supabaseClient
-                .from('user_tracking')
-                .delete()
-                .eq('id', id);
-
-            if (error) throw error;
-            console.log(`성공: ID ${id} 삭제 완료.`);
-        } catch (err) {
-            console.error('삭제 실패:', err.message);
-        }
-    }
-
-    // 6. 실시간 변동 동기화 핸들러
-    function handleRealtimeUpdate(payload) {
-        const logContainer = document.getElementById('log-container');
-        const eventType = payload.eventType;
-
-        if (eventType === 'INSERT') {
-            const newElement = createLogElement(payload.new);
-            logContainer.insertBefore(newElement, logContainer.firstChild);
-            updateDepthDisplay(payload.new);
-        } 
-        else if (eventType === 'UPDATE') {
-            const target = document.getElementById(`pin-${payload.new.id}`);
-            if (target) {
-                const dressCodeText = payload.new.dress_code ? payload.new.dress_code : '미지정';
-                target.querySelector('.witch-text').innerText = `유저 ID: ${payload.new.user_id} | 깊이: ${payload.new.depth}m | 드레스코드: ${dressCodeText} (수정됨)`;
-            }
-            updateDepthDisplay(payload.new);
-        } 
-        else if (eventType === 'DELETE') {
-            const target = document.getElementById(`pin-${payload.old.id}`);
-            if (target) target.remove(); 
-        }
-    }
-
-    function updateDepthDisplay(item) {
-        document.getElementById('user-depth-display').innerText = `최근 깊이: ${item.depth || 0}m (유저: ${item.user_id})`;
-    }
+    fetchInitialData();
 });
 </script>
 </body>
