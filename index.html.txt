@@ -22,7 +22,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 .image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
 .pin-layer { position: absolute; inset: 0; }
 
-/* ⚡ 핀 깜빡임 효과 추가 */
+/* ⚡ 깜빡이는 핀 애니메이션 */
 .pin { 
     position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
     border: 2px solid #fff; border-radius: 50%; background: #dc2626; 
@@ -47,7 +47,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
 .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.22); }
 .modal h3 { margin: 0 0 10px 0; font-size: 16px; }
-.form-row, .view-row { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; margin-bottom: 10px; }
+.form-row, .view-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 6px; margin-bottom: 10px; }
 .form-row label, .view-label { display: block; font-size: 13px; font-weight: bold; }
 .form-row input, .form-row select { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
 .view-value { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; font-size: 13px; }
@@ -58,7 +58,6 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 .btn-red { background: #dc2626; color: #fff; margin-right: auto; }
 .status-text { margin-top: 8px; font-size: 12px; color: #6b7280; }
 .profile-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; }
-.profile-info { display: flex; align-items: center; gap: 18px; min-width: 0; flex: 1; }
 .profile-item { font-size: 16px; color: #111827; font-weight: bold; }
 .profile-edit-btn { border: none; border-radius: 6px; background: #2563eb; color: #fff; padding: 8px 12px; cursor: pointer; font-size: 13px; flex-shrink: 0; }
 </style>
@@ -68,9 +67,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
     <div class="page-title" id="mainTitle">검은 마녀의 탑 위치 현황</div>
 
     <div class="profile-bar">
-        <div class="profile-info">
-            <div class="profile-item">오늘의 드레스코드 : <span id="dressCodeText" style="color:#2563eb;">-</span></div>
-        </div>
+        <div class="profile-item">드레스코드 : <span id="dressCodeText" style="color:#2563eb;">-</span></div>
         <button type="button" class="profile-edit-btn" id="profileEditBtn">수정</button>
     </div>
 
@@ -95,7 +92,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 
 <div class="modal-backdrop" id="introModalBackdrop">
     <div class="modal">
-        <h3>오늘의 드레스코드 안내</h3>
+        <h3>🏰 오늘의 드레스코드</h3>
         <div style="padding:15px; background:#eff6ff; border:1px solid #bfdbfe; font-weight:bold; color:#1e40af; text-align:center; font-size:18px; margin:10px 0;">
             <span id="introDressCodeText">불러오는 중...</span>
         </div>
@@ -105,7 +102,8 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 
 <div class="modal-backdrop" id="createModalBackdrop"><div class="modal"><h3>핀 정보 입력</h3><div class="form-row"><label for="pinName">이름 :</label><input type="text" id="pinName" placeholder="이름을 입력해주세요"></div><div class="form-row"><label for="pinWeapon">무기 :</label><select id="pinWeapon"><option value="입력 안함">입력 안함</option><option value="검과방패">검과방패</option><option value="전투봉">전투봉</option><option value="활">활</option><option value="석궁">석궁</option><option value="지팡이">지팡이</option><option value="사이드">사이드</option><option value="전투방패">전투방패</option><option value="단검">단검</option><option value="대검">대검</option><option value="맨손">맨손</option></select></div><div class="modal-buttons"><button class="btn btn-gray" id="cancelCreateBtn" type="button">취소</button><button class="btn btn-blue" id="saveBtn" type="button">저장</button></div></div></div>
 <div class="modal-backdrop" id="viewModalBackdrop"><div class="modal"><h3>핀 정보</h3><div class="view-row"><div class="view-label">이름</div><div class="view-value" id="viewName"></div></div><div class="view-row"><div class="view-label">무기</div><div class="view-value" id="viewWeapon"></div></div><div class="view-row"><div class="view-label">시간</div><div class="view-value" id="viewDateTime"></div></div><div class="modal-buttons"><button class="btn btn-red" id="deleteBtn" type="button">삭제</button><button class="btn btn-gray" id="closeViewBtn" type="button">닫기</button></div></div></div>
-<div class="modal-backdrop" id="profileModalBackdrop"><div class="modal"><h3>드레스코드 수정</h3><div class="form-row"><label for="dressCodeInput">드레스코드 :</label><input type="text" id="dressCodeInput" placeholder="오늘의 드레스코드를 입력하세요"></div><div class="modal-buttons"><button class="btn btn-gray" id="profileCancelBtn" type="button">취소</button><button class="btn btn-blue" id="profileSaveBtn" type="button">저장</button></div></div></div>
+
+<div class="modal-backdrop" id="profileModalBackdrop"><div class="modal"><h3>드레스코드 수정</h3><div class="form-row"><label for="dressCodeInput">코드 :</label><input type="text" id="dressCodeInput" placeholder="입력하세요"></div><div class="modal-buttons"><button class="btn btn-gray" id="profileCancelBtn" type="button">취소</button><button class="btn btn-blue" id="profileSaveBtn" type="button">저장</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -122,16 +120,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const BOARDS = [{ id: 'floor1', name: '1층', image: 'https://i.ibb.co/0RST75vn/1.png' }, { id: 'floor2', name: '2층', image: 'https://i.ibb.co/MD9V69Vm/2.png' }];
 
-    // 요소 선택
+    // UI 요소
     const dressCodeText = document.getElementById('dressCodeText');
+    const introDressCodeText = document.getElementById('introDressCodeText');
     const profileEditBtn = document.getElementById('profileEditBtn');
     const profileModalBackdrop = document.getElementById('profileModalBackdrop');
     const dressCodeInput = document.getElementById('dressCodeInput');
     const introModalBackdrop = document.getElementById('introModalBackdrop');
-    const introDressCodeText = document.getElementById('introDressCodeText');
     const introConfirmBtn = document.getElementById('introConfirmBtn');
-    
-    // ... 나머지 DOM 요소들은 그대로 ...
     const tabs = document.getElementById('tabs');
     const refreshBtn = document.getElementById('refreshBtn');
     const imageWrap = document.getElementById('imageWrap');
@@ -151,48 +147,93 @@ document.addEventListener('DOMContentLoaded', function () {
     const deleteBtn = document.getElementById('deleteBtn');
     
     let currentBoardId = BOARDS[0].id;
+    let pendingPoint = null;
+    let selectedPinId = null;
     let store = {};
     let supabaseClient = null;
-    let dressCode = ''; // 단일 변수로 변경
+    let currentDressCode = '';
 
-    // 로직 처리 함수들
-    function renderProfile() { dressCodeText.textContent = dressCode || '설정 필요'; }
+    function setStatus(msg) { statusText.textContent = msg; }
+    function escapeHtml(v) { return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+    function parsePinMeta(name) {
+        const text = String(name || '').trim();
+        const match = text.match(/^이름\s*:\s*(.*?)\s*\/\s*무기\s*:\s*(.*)$/);
+        return match ? { displayName: match[1].trim(), weapon: match[2].trim() } : { displayName: text, weapon: '입력 안함' };
+    }
+    function getNow() { const n = new Date(); return { d: `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`, t: `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}` }; }
 
+    // 프로필(드레스코드) 관련 함수
     async function loadProfile(showIntro = true) {
         if (!supabaseClient) return;
         const { data } = await supabaseClient.from(PROFILE_TABLE).select('dress_code').eq('id', 1).maybeSingle();
-        dressCode = data?.dress_code || '';
-        renderProfile();
+        currentDressCode = data?.dress_code || '미설정';
+        dressCodeText.textContent = currentDressCode;
         if (showIntro) {
-            introDressCodeText.textContent = dressCode || '설정 필요';
+            introDressCodeText.textContent = currentDressCode;
             introModalBackdrop.style.display = 'flex';
         }
     }
 
     async function saveProfile() {
         if (!supabaseClient) return;
-        const newCode = dressCodeInput.value.trim();
-        await supabaseClient.from(PROFILE_TABLE).upsert({ id: 1, dress_code: newCode });
-        dressCode = newCode;
-        renderProfile();
+        const val = dressCodeInput.value.trim();
+        await supabaseClient.from(PROFILE_TABLE).upsert({ id: 1, dress_code: val });
+        currentDressCode = val;
+        dressCodeText.textContent = val;
         profileModalBackdrop.style.display = 'none';
     }
 
-    // [핀 로직 함수 생략 가능 - 기존 그대로 유지]
-    // ... 기존 핀 로직 함수(renderPins, loadPins, createPin 등)는 그대로 사용 ...
-    // 아래 코드는 필수 연결부입니다.
+    // 핀 관련 로직
+    async function loadPins() {
+        if (!supabaseClient) return;
+        const { data } = await supabaseClient.from(PINS_TABLE).select('*').order('created_at', { ascending: true });
+        store = {};
+        BOARDS.forEach(b => store[b.id] = []);
+        (data || []).forEach(item => { if(!store[item.board_id]) store[item.board_id] = []; store[item.board_id].push(item); });
+        renderAll();
+    }
 
-    // (기존 코드의 모든 함수를 이 자리에 유지하십시오)
-    // ... [기존 loadPins, renderPins, renderList, deletePin 등 그대로 사용] ...
+    function renderPins() {
+        const rect = bgImage.getBoundingClientRect();
+        if (rect.width === 0) return;
+        pinLayer.innerHTML = '';
+        (store[currentBoardId] || []).forEach(item => {
+            const meta = parsePinMeta(item.name);
+            const x = item.x_ratio * rect.width;
+            const y = item.y_ratio * rect.height;
+            const pin = document.createElement('button');
+            pin.className = 'pin';
+            pin.style.left = x + 'px'; pin.style.top = y + 'px';
+            pin.onclick = () => { selectedPinId = item.id; viewName.textContent = meta.displayName; viewWeapon.textContent = meta.weapon; viewDateTime.textContent = item.pin_date + ' ' + item.pin_time; viewModalBackdrop.style.display = 'flex'; };
+            pinLayer.appendChild(pin);
+        });
+    }
+
+    function renderAll() {
+        tabs.innerHTML = BOARDS.map(b => `<button class="tab-btn ${b.id === currentBoardId ? 'active' : ''}" data-id="${b.id}">${b.name}</button>`).join('');
+        bgImage.src = BOARDS.find(b => b.id === currentBoardId).image;
+        listTitle.textContent = BOARDS.find(b => b.id === currentBoardId).name + ' 핀 목록';
+        pinList.innerHTML = (store[currentBoardId] || []).map((item, i) => `<div class="pin-item"><div class="pin-item-text">${i+1}. ${item.name}</div><button class="delete-btn" data-id="${item.id}">삭제</button></div>`).join('');
+        renderPins();
+    }
+
+    // 이벤트 리스너들
+    refreshBtn.onclick = () => { loadPins(); loadProfile(false); };
+    profileEditBtn.onclick = () => { dressCodeInput.value = currentDressCode; profileModalBackdrop.style.display = 'flex'; };
+    introConfirmBtn.onclick = () => introModalBackdrop.style.display = 'none';
+    document.getElementById('profileCancelBtn').onclick = () => profileModalBackdrop.style.display = 'none';
+    document.getElementById('profileSaveBtn').onclick = saveProfile;
+    tabs.onclick = e => { if (e.target.dataset.id) { currentBoardId = e.target.dataset.id; renderAll(); } };
+    imageWrap.onclick = e => { if(e.target !== bgImage && e.target !== pinLayer) return; const rect = bgImage.getBoundingClientRect(); pendingPoint = { x: (e.clientX - rect.left)/rect.width, y: (e.clientY - rect.top)/rect.height }; pinName.value = ''; createModalBackdrop.style.display = 'flex'; };
+    saveBtn.onclick = async () => { if(!pendingPoint) return; const n = getNow(); await supabaseClient.from(PINS_TABLE).insert({ board_id: currentBoardId, x_ratio: pendingPoint.x, y_ratio: pendingPoint.y, name: `이름 : ${pinName.value} / 무기 : ${pinWeapon.value}`, pin_date: n.d, pin_time: n.t }); createModalBackdrop.style.display = 'none'; };
+    deleteBtn.onclick = async () => { await supabaseClient.from(PINS_TABLE).delete().eq('id', selectedPinId); viewModalBackdrop.style.display = 'none'; loadPins(); };
+    pinList.onclick = async e => { if (e.target.classList.contains('delete-btn')) { await supabaseClient.from(PINS_TABLE).delete().eq('id', e.target.dataset.id); loadPins(); } };
 
     // 초기화
-    document.addEventListener('DOMContentLoaded', async () => {
-        // [중략 - 기존 init 코드 동일하게 사용]
-        // supabase 초기화 후
-        loadProfile();
-    });
-
-    // ... [나머지 이벤트 리스너 동일]
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    loadProfile();
+    loadPins();
+    supabaseClient.channel('realtime').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TABLE }, () => loadPins()).subscribe();
 });
 </script>
 </body>
