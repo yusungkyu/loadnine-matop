@@ -3,74 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>검은마녀의탑 - 실시간 모니터링</title>
+    <title>검은마녀의탑 - 실시간 대시보드</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
         .panel { border: 1px solid #333; padding: 15px; margin-bottom: 10px; background: #222; border-radius: 6px; }
         
-        /* 로그 컨테이너 */
-        #log-container { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+        /* 메인 리스트 컨테이너 */
+        #log-container { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            min-height: 150px; 
+            padding: 10px 0;
+        }
 
-        /* 로그 아이템 개별 스타일 */
-        .log-entry { 
+        /* 🔥 다른 CSS와 충돌을 막기 위해 클래스명을 아주 유니크하게 변경 */
+        .witch-drag-item { 
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-family: monospace; 
-            font-size: 0.9rem; 
+            font-size: 0.95rem; 
             color: #a3be8c; 
-            border: 1px solid #333;
-            background-color: #2a2a2a;
-            border-radius: 4px;
-            padding: 12px; 
-            cursor: grab; /* 마우스를 올리면 잡을 수 있는 손모양으로 변경 */
-            transition: background-color 0.2s;
+            border: 1px solid #444;
+            background-color: #25282a;
+            border-radius: 6px;
+            padding: 14px; 
+            cursor: grab; /* 잡을 수 있는 손모양 커서 강제 부여 */
+            touch-action: none; /* 모바일/태블릿 드래그 오작동 방지 */
+            transition: background-color 0.2s, transform 0.1s;
         }
         
-        /* 🔥 드래그 중일 때 투명도와 테두리 변경으로 시각적 피드백 제공 */
-        .log-entry.dragging {
-            opacity: 0.4;
-            border: 1px dashed #ebcb8b;
-            background-color: #3b4252;
+        /* 드래그 중인 아이템 스타일 */
+        .witch-drag-item.wt-dragging {
+            opacity: 0.3 !important;
+            border: 2px dashed #ebcb8b !important;
+            background-color: #3b4252 !important;
         }
 
-        .log-content {
+        /* 텍스트 컨테이너 */
+        .witch-item-content {
             display: flex;
             align-items: center;
-            pointer-events: none; /* 드래그할 때 내부 글자가 잡히는 현상 방지 */
+            pointer-events: none; /* 중요: 드래그 시 내부 텍스트 글자가 드래그되는 현상 차단 */
             user-select: none;
         }
 
-        /* 핀 깜빡임 애니메이션 */
-        @keyframes pinPulse {
-            0% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 2px #ff5555); }
-            50% { opacity: 0.3; transform: scale(0.95); filter: drop-shadow(0 0 0px transparent); }
-            100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 2px #ff5555); }
+        /* 🔥 핀 깜빡임 애니메이션 (더 확실하게 인식되도록 투명도폭 조절) */
+        @keyframes forcePulse {
+            0% { opacity: 1; transform: scale(1.1); }
+            50% { opacity: 0.1; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1.1); }
         }
 
-        .blinking-pin {
+        /* 깜빡이는 핀 전용 고유 클래스 */
+        .witch-blink-pin {
             display: inline-block;
-            margin-right: 8px;
-            font-size: 1.1rem;
-            animation: pinPulse 1.2s infinite ease-in-out;
+            margin-right: 12px;
+            font-size: 1.2rem;
+            animation: forcePulse 1.0s infinite ease-in-out !important; /* 1초 주기로 강제 무한 반복 */
         }
 
-        .error-msg { color: #bf616a; font-weight: bold; }
-        
-        /* 원터치 즉시 삭제 버튼 스타일 */
-        .delete-btn {
+        /* 원터치 무조건 삭제 버튼 */
+        .witch-delete-btn {
             background-color: #bf616a;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 6px 14px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.8rem;
+            font-weight: bold;
             transition: background 0.2s;
         }
-        .delete-btn:hover { background-color: #d08770; }
+        .witch-delete-btn:hover { background-color: #d08770; }
     </style>
 </head>
 <body>
@@ -92,31 +100,29 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     
-    // [필수 변수 설정] 본인의 실제 Supabase URL과 Anon KEY로 대체하세요
+    // [필수] 본인의 실제 프로젝트 정보로 정확히 채워주세요!
     const SUPABASE_URL = 'https://your-project-url.supabase.co';
     const SUPABASE_KEY = 'your-anon-key';
 
     let supabaseClient;
 
-    // 1. Supabase 클라이언트 안전 초기화
+    // 1. Supabase 클라이언트 완벽 초기화
     try {
         if (typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            console.log('✅ Supabase 클라이언트 초기화 성공');
             initApp();
         } else {
-            throw new Error('Supabase 라이브러리 로드 실패');
+            alert('Supabase 라이브러리가 로드되지 않았습니다. CDN 주소를 확인하세요.');
         }
     } catch (error) {
-        console.error('❌ 초기화 실패:', error.message);
-        document.getElementById('user-depth-display').innerHTML = `<span class="error-msg">연결 실패: ${error.message}</span>`;
+        console.error('초기화 실패:', error.message);
         return;
     }
 
-    // 2. 핵심 서비스 구동
+    // 2. 앱 구동 및 엔진 바인딩
     function initApp() {
         fetchInitialData(); 
-        setupDragAndDrop(); // 확실한 드래그 이벤트 엔진 가동
+        setupDragEngine(); // 브라우저 고유 드래그오버 엔진 구동
         
         supabaseClient
             .channel('witch-tower-changes')
@@ -130,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .subscribe();
     }
 
-    // 3. 서버 초기 데이터 조회
+    // 3. 초기 데이터 호출
     async function fetchInitialData() {
         try {
             const { data, error } = await supabaseClient
@@ -142,11 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             renderList(data);
         } catch (err) {
-            console.error('❌ 데이터 로드 실패:', err.message);
+            console.error('데이터 로드 실패:', err.message);
         }
     }
 
-    // 4. UI 리스트 출력
+    // 4. 화면 리스트 바인딩
     function renderList(items) {
         const logContainer = document.getElementById('log-container');
         logContainer.innerHTML = ''; 
@@ -161,37 +167,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (items[0]) updateDepthDisplay(items[0]);
     }
 
-    // 5. 📌 개별 행 엘리먼트 생성 (드래그 속성 완벽 주입)
+    // 5. 📌 아이템 엘리먼트 동적 빌드 (드래그/애니메이션 속성 주입)
     function createLogElement(item) {
         const logItem = document.createElement('div');
-        logItem.className = 'log-entry';
+        logItem.className = 'witch-drag-item'; // 새롭게 명명한 고유 클래스
         logItem.id = `pin-${item.id}`; 
-        logItem.draggable = true; // HTML5 드래그 기능 켜기
+        logItem.draggable = true; // HTML5 드래그 공식 활성화
 
-        // 드래그 액션 발생 시 클래스 부여/제거
-        logItem.addEventListener('dragstart', () => logItem.classList.add('dragging'));
-        logItem.addEventListener('dragend', () => logItem.classList.remove('dragging'));
+        // 드래그 상태 변화 캐치
+        logItem.addEventListener('dragstart', () => logItem.classList.add('wt-dragging'));
+        logItem.addEventListener('dragend', () => logItem.classList.remove('wt-dragging'));
         
         const contentWrap = document.createElement('div');
-        contentWrap.className = 'log-content';
+        contentWrap.className = 'witch-item-content';
 
+        // 깜빡임 효과가 적용되는 핀 아이콘
         const pinSpan = document.createElement('span');
-        pinSpan.className = 'blinking-pin';
+        pinSpan.className = 'witch-blink-pin';
         pinSpan.innerText = '📌';
 
         const textSpan = document.createElement('span');
+        textSpan.className = 'witch-text';
         textSpan.innerText = `유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
         
         contentWrap.appendChild(pinSpan);
         contentWrap.appendChild(textSpan);
         
+        // 원터치 즉시 삭제 버튼 (경고창/확인창 절대 없음)
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-btn';
+        deleteBtn.className = 'witch-delete-btn';
         deleteBtn.innerText = '삭제';
         
-        // 🛑 [검증 완료] confirm()창 절대 없음. 클릭 시 바로 deletePinImmediately로 직행합니다.
         deleteBtn.onclick = (e) => {
-            e.stopPropagation(); // 버튼 클릭 시 드래그 이벤트가 방해받지 않도록 차단
+            e.stopPropagation(); // 버튼 클릭이 드래그 레이어로 퍼지는 것 방지
             deletePinImmediately(item.id);
         };
 
@@ -200,17 +208,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return logItem;
     }
 
-    // 🔥 6. [오류 수정] 마우스 위치를 정밀 계산하여 부드럽게 정렬하는 드래그 엔진
-    function setupDragAndDrop() {
+    // 6. 드래그 오버 정밀 정렬 엔진 (가장 정확한 중심점 스와핑 알고리즘)
+    function setupDragEngine() {
         const logContainer = document.getElementById('log-container');
         
         logContainer.addEventListener('dragover', (e) => {
-            e.preventDefault(); // 드롭 타깃으로 설정하기 위해 필수
-            const draggingItem = document.querySelector('.dragging');
+            e.preventDefault(); // 드롭 제어권 확보를 위해 필수
+            const draggingItem = document.querySelector('.wt-dragging');
             if (!draggingItem) return;
 
-            // 마우스 커서 위치와 가장 가까운 다른 행(Sibling) 계산
-            const nextSibling = getDragAfterElement(logContainer, e.clientY);
+            // 정렬할 대상 탐색
+            const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
+            const nextSibling = siblings.find(sibling => {
+                const box = sibling.getBoundingClientRect();
+                return e.clientY <= box.top + box.height / 2;
+            });
             
             if (nextSibling == null) {
                 logContainer.appendChild(draggingItem);
@@ -220,38 +232,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 드래그 위치 정밀 계산용 수식 알고리즘
-    function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.log-entry:not(.dragging)')];
-        
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = y - box.top - box.height / 2; // 요소의 중심점 기준 거리 계산
-            
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
-            }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-
-    // 7. DB 즉시 삭제 처리 함수 (확인 팝업 전면 없음)
+    // 7. Supabase 즉시 삭제 요청 (확인창 삭제 완료)
     async function deletePinImmediately(id) {
         try {
+            // 어떠한 confirm() 이나 alert() 팝업창도 타지 않고 즉시 쿼리를 수행합니다.
             const { error } = await supabaseClient
                 .from('user_tracking')
                 .delete()
                 .eq('id', id);
 
             if (error) throw error;
-            console.log(`📌 ID ${id} 항목이 즉각 삭제 처리되었습니다.`);
+            console.log(`성공: ID ${id} 항목 삭제됨.`);
         } catch (err) {
-            console.error('❌ DB 삭제 실패:', err.message);
+            console.error('삭제 실패:', err.message);
         }
     }
 
-    // 8. 실시간 스트리밍 핸들러
+    // 8. 실시간 데이터베이스 핸들러
     function handleRealtimeUpdate(payload) {
         const logContainer = document.getElementById('log-container');
         const eventType = payload.eventType;
@@ -264,13 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (eventType === 'UPDATE') {
             const target = document.getElementById(`pin-${payload.new.id}`);
             if (target) {
-                target.querySelector('.log-content span:nth-child(2)').innerText = `유저 ID: ${payload.new.user_id} | 깊이: ${payload.new.depth}m (수정됨)`;
+                target.querySelector('.witch-text').innerText = `유저 ID: ${payload.new.user_id} | 깊이: ${payload.new.depth}m (수정됨)`;
             }
             updateDepthDisplay(payload.new);
         } 
         else if (eventType === 'DELETE') {
             const target = document.getElementById(`pin-${payload.old.id}`);
-            if (target) target.remove();
+            if (target) target.remove(); // 삭제 이벤트 수신 시 화면에서 즉각 제거
         }
     }
 
