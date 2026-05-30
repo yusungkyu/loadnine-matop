@@ -108,3 +108,254 @@
 
 <div class="modal-backdrop" id="introModalBackdrop"><div class="modal"><h3>🏰 오늘의 드레스코드</h3><div id="introDressCodeText" style="padding:15px; background:#2b2b2b; border:1px solid #444; font-weight:bold; color:#81a1c1; text-align:center; font-size:18px; margin:10px 0; border-radius:4px;"></div><div class="modal-buttons"><button class="btn btn-blue" id="introConfirmBtn" style="width:100%;">확인</button></div></div></div>
 <div class="modal-backdrop" id="createModalBackdrop"><div class="modal"><h3>핀 등록</h3><div class="form-row"><label>이름 :</label><input type="text" id="pinName" placeholder="이름 입력"></div><div class="form-row"><label>무기 :</label><select id="pinWeapon"><option value="입력 안함">입력 안함</option><option value="검과방패">검과방패</option><option value="전투봉">전투봉</option><option value="활">활</option><option value="석궁">석궁</option><option value="지팡이">지팡이</option><option value="사이드">사이드</option><option value="전투방패">전투방패</option><option value="단검">단검</option><option value="대검">대검</option><option value="맨손">맨손</option></select></div><div class="modal-buttons"><button class="btn btn-gray" id="cancelCreateBtn">취소</button><button class="btn btn-blue" id="saveBtn">저장</button></div></div></div>
+<div class="modal-backdrop" id="viewModalBackdrop"><div class="modal"><h3>핀 정보</h3><div class="form-row"><label>이름 :</label><div class="view-value" id="viewName"></div></div><div class="form-row"><label>무기 :</label><div class="view-value" id="viewWeapon"></div></div><div class="modal-buttons"><button class="btn btn-red" id="deleteBtn">삭제</button><button class="btn btn-gray" id="closeViewBtn">닫기</button></div></div></div>
+<div class="modal-backdrop" id="profileModalBackdrop"><div class="modal"><h3>드레스코드 수정</h3><div class="form-row"><label>코드 :</label><input type="text" id="dressCodeInput" placeholder="코드를 입력하세요"></div><div class="modal-buttons"><button class="btn btn-gray" id="profileCancelBtn">취소</button><button class="btn btn-blue" id="profileSaveBtn">저장</button></div></div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 🔗 Supabase 연결 설정
+    const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
+    
+    // 🌟 GitHub Pages 환경 유연성 확보를 위해 마력의 탑 테이블명 명시적 고정
+    const PINS_TBL = 'pins_matop';
+    const PROFILE_TBL = 'matop_profile';
+
+    let supabaseClient;
+    let currentBoard = 'floor1';
+    let pins = [];
+    let pendingPoint = null;
+    let selectedPin = null;
+
+    try {
+        // ✨ CDN 표준 객체 검증 (소문자 supabase가 일관되게 맞습니다)
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log('✅ Supabase 클라이언트 연결 완료');
+            initApp();
+        } else {
+            throw new Error('Supabase 라이브러리 로딩에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('❌ 초기화 오류:', error.message);
+        document.getElementById('user-depth-display').innerHTML = `<span class="error-msg">연결 실패: ${error.message}</span>`;
+        return;
+    }
+
+    function initApp() {
+        loadMapData(true);
+        fetchInitialData();
+        
+        supabaseClient.channel('map-changes').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadMapData(false)).subscribe();
+        supabaseClient.channel('profile-changes').on('postgres_changes', { event: '*', schema: 'public', table: PROFILE_TBL }, () => loadMapData(false)).subscribe();
+        
+        supabaseClient.channel('witch-tower-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'user_tracking' }, (payload) => {
+                handleRealtimeUpdate(payload);
+            }).subscribe();
+    }
+
+    async function loadMapData(showIntro = false) {
+        try {
+            const { data: p } = await supabaseClient.from(PINS_TBL).select('*').order('created_at', { ascending: true });
+            const { data: pr } = await supabaseClient.from(PROFILE_TBL).select('dress_code').eq('id', 1).maybeSingle();
+            
+            pins = p || [];
+            const currentDressCode = pr?.dress_code || '미설정';
+            document.getElementById('dressCodeText').textContent = currentDressCode;
+            
+            if (showIntro) {
+                document.getElementById('introDressCodeText').textContent = currentDressCode;
+                document.getElementById('introModalBackdrop').style.display = 'flex';
+            }
+            renderMap();
+        } catch (e) {
+            console.error("데이터 동기화 실패:", e);
+        }
+    }
+
+    function renderMap() {
+        const list = document.getElementById('pinList');
+        const layer = document.getElementById('pinLayer');
+        const img = document.getElementById('bgImage');
+        const rect = img.getBoundingClientRect();
+        
+        document.getElementById('listTitle').textContent = currentBoard === 'floor1' ? '📍 1층 실시간 위치 목록' : '📍 2층 실시간 위치 목록';
+        layer.innerHTML = '';
+        list.innerHTML = '';
+        
+        const filtered = pins.filter(p => p.board_id === currentBoard);
+        if (filtered.length === 0) {
+            list.innerHTML = '<div style="color: #6b7280; font-size: 13px; padding: 6px 0;">등록된 실시간 위치가 없습니다.</div>';
+        }
+
+        filtered.forEach((p, i) => {
+            const displayStr = p.name || `이름 : 무명 / 무기 : 입력 안함`;
+            const splitName = displayStr.split(' / ');
+            const n = splitName[0].replace('이름 : ', '').trim();
+            const w = (splitName[1] || '').replace('무기 : ', '').trim();
+
+            const btn = document.createElement('button');
+            btn.className = 'pin';
+            const leftPos = rect.width > 0 ? (p.x_ratio * rect.width) : (p.x_ratio * 100) + '%';
+            const topPos = rect.height > 0 ? (p.y_ratio * rect.height) : (p.y_ratio * 100) + '%';
+            btn.style.left = typeof leftPos === 'number' ? leftPos + 'px' : leftPos;
+            btn.style.top = typeof topPos === 'number' ? topPos + 'px' : topPos;
+            
+            const handleDragStart = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                let isDragging = false;
+                const isTouch = e.type === 'touchstart';
+                const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+                const upEvent = isTouch ? 'touchend' : 'mouseup';
+
+                const onMove = (moveEv) => {
+                    isDragging = true;
+                    const clientX = isTouch ? moveEv.touches[0].clientX : moveEv.clientX;
+                    const clientY = isTouch ? moveEv.touches[0].clientY : moveEv.clientY;
+                    let newX = clientX - img.getBoundingClientRect().left;
+                    let newY = clientY - img.getBoundingClientRect().top;
+                    btn.style.left = Math.max(0, Math.min(newX, img.getBoundingClientRect().width)) + 'px';
+                    btn.style.top = Math.max(0, Math.min(newY, img.getBoundingClientRect().height)) + 'px';
+                };
+
+                const onUp = async (upEv) => {
+                    document.removeEventListener(moveEvent, onMove);
+                    document.removeEventListener(upEvent, onUp);
+                    
+                    if (isDragging) {
+                        const clientX = isTouch ? upEv.changedTouches[0].clientX : upEv.clientX;
+                        const clientY = isTouch ? upEv.changedTouches[0].clientY : upEv.clientY;
+                        let finalXRatio = (clientX - img.getBoundingClientRect().left) / img.getBoundingClientRect().width;
+                        let finalYRatio = (clientY - img.getBoundingClientRect().top) / img.getBoundingClientRect().height;
+                        
+                        await supabaseClient.from(PINS_TBL).update({
+                            x_ratio: Math.max(0, Math.min(finalXRatio, 1)),
+                            y_ratio: Math.max(0, Math.min(finalYRatio, 1))
+                        }).eq('id', p.id);
+                    } else {
+                        selectedPin = p; 
+                        document.getElementById('viewName').textContent = n;
+                        document.getElementById('viewWeapon').textContent = w;
+                        document.getElementById('viewModalBackdrop').style.display = 'flex';
+                    }
+                };
+                document.addEventListener(moveEvent, onMove, { passive: false });
+                document.addEventListener(upEvent, onUp);
+            };
+
+            btn.onmousedown = handleDragStart;
+            btn.ontouchstart = handleDragStart;
+            layer.appendChild(btn);
+            list.innerHTML += `<div class="pin-item"><span>${i+1}. ${displayStr}</span><button class="btn-delete-direct" onclick="deletePin(${p.id})">삭제</button></div>`;
+        });
+    }
+
+    window.deletePin = async (id) => {
+        if (!confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData(false);
+    };
+
+    async function fetchInitialData() {
+        try {
+            const { data, error } = await supabaseClient.from('user_tracking').select('*').order('created_at', { ascending: false }).limit(10);
+            if (error) throw error;
+            if (data && data.length > 0) { renderInitialList(data); } 
+            else { document.getElementById('user-depth-display').innerText = '현재 기록된 데이터가 없습니다.'; }
+        } catch (err) {
+            console.error('❌ 깊이 데이터 수신 오류:', err.message);
+        }
+    }
+
+    function handleRealtimeUpdate(payload) {
+        const logContainer = document.getElementById('log-container');
+        const eventType = payload.eventType;
+        const newData = payload.new || payload.old || {};
+        
+        const logItem = document.createElement('div');
+        logItem.className = 'log-entry';
+        logItem.innerText = `[${eventType}] 유저 ID: ${newData.user_id || 'N/A'} | 현재 깊이: ${newData.depth || 0}m (${new Date().toLocaleTimeString()})`;
+        logContainer.insertBefore(logItem, logContainer.firstChild);
+
+        if (eventType === 'UPDATE' || eventType === 'INSERT') {
+            document.getElementById('user-depth-display').innerText = `현재 깊이: ${newData.depth || 0}m (유저: ${newData.user_id})`;
+        }
+    }
+
+    function renderInitialList(items) {
+        const logContainer = document.getElementById('log-container');
+        logContainer.innerHTML = ''; 
+        items.forEach(item => {
+            const logItem = document.createElement('div');
+            logItem.className = 'log-entry';
+            logItem.innerText = `[기존 기록] 유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
+            logContainer.appendChild(logItem);
+        });
+        if (items[0]) { document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth || 0}m (유저: ${items[0].user_id})`; }
+    }
+
+    // 모달 제어 이벤트
+    document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
+    document.getElementById('introConfirmBtn').onclick = () => document.getElementById('introModalBackdrop').style.display = 'none';
+    document.getElementById('cancelCreateBtn').onclick = () => document.getElementById('createModalBackdrop').style.display = 'none';
+    document.getElementById('closeViewBtn').onclick = () => document.getElementById('viewModalBackdrop').style.display = 'none';
+    document.getElementById('profileCancelBtn').onclick = () => document.getElementById('profileModalBackdrop').style.display = 'none';
+
+    document.getElementById('profileEditBtn').onclick = () => { 
+        document.getElementById('dressCodeInput').value = document.getElementById('dressCodeText').textContent; 
+        document.getElementById('profileModalBackdrop').style.display = 'flex'; 
+    };
+    
+    document.getElementById('profileSaveBtn').onclick = async () => {
+        await supabaseClient.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
+        loadMapData(false);
+        document.getElementById('profileModalBackdrop').style.display = 'none';
+    };
+
+    const registerPoint = (clientX, clientY, target) => {
+        const rect = target.getBoundingClientRect();
+        pendingPoint = { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+        document.getElementById('pinName').value = '';
+        document.getElementById('pinWeapon').selectedIndex = 0;
+        document.getElementById('createModalBackdrop').style.display = 'flex';
+    };
+
+    document.getElementById('imageWrap').onmousedown = (e) => { if (e.target.id === 'bgImage') registerPoint(e.clientX, e.clientY, e.target); };
+    document.getElementById('imageWrap').ontouchstart = (e) => { if (e.target.id === 'bgImage') registerPoint(e.touches[0].clientX, e.touches[0].clientY, e.target); };
+
+    document.getElementById('saveBtn').onclick = async () => {
+        if (!pendingPoint) return;
+        await supabaseClient.from(PINS_TBL).insert({ 
+            board_id: currentBoard, x_ratio: pendingPoint.x, y_ratio: pendingPoint.y, 
+            name: `이름 : ${document.getElementById('pinName').value.trim() || '무명'} / 무기 : ${document.getElementById('pinWeapon').value}` 
+        });
+        document.getElementById('createModalBackdrop').style.display = 'none';
+        loadMapData(false);
+    };
+
+    document.getElementById('deleteBtn').onclick = async () => {
+        if (!selectedPin || !confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', selectedPin.id);
+        document.getElementById('viewModalBackdrop').style.display = 'none';
+        loadMapData(false);
+    };
+
+    // 🔄 탭 전환 시 직접 이미지 매핑 구조 완전 고정
+    document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        e.target.classList.add('active');
+        currentBoard = e.target.dataset.id;
+        
+        // 유저 고유 1, 2층 이미지 동기화
+        document.getElementById('bgImage').src = currentBoard === 'floor1' ? 'https://i.ibb.co/0RST75vn/1.png' : 'https://i.ibb.co/MD9V69Vm/2.png';
+        document.getElementById('bgImage').onload = renderMap;
+        renderMap(); 
+    });
+
+    document.getElementById('refreshBtn').onclick = () => { loadMapData(false); fetchInitialData(); };
+    window.addEventListener('resize', renderMap);
+});
+</script>
+</body>
+</html>
