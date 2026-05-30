@@ -17,9 +17,8 @@
         }
         .modal-content { background: #2a2a2a; padding: 30px; border-radius: 10px; border: 1px solid #ebcb8b; text-align: center; }
         
-        /* 2. 로그 컨테이너 및 아이템 스타일 */
+        /* 2. 로그 및 드래그 스타일 */
         #log-container { display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 10px 0; }
-        
         .witch-drag-item { 
             display: flex; justify-content: space-between; align-items: center;
             font-family: monospace; font-size: 0.95rem; color: #a3be8c; 
@@ -29,21 +28,22 @@
         .witch-drag-item.wt-dragging { opacity: 0.3 !important; border: 2px dashed #ebcb8b !important; }
         .witch-item-content { display: flex; align-items: center; pointer-events: none; user-select: none; }
         
-        /* 3. 핀 깜빡임 애니메이션 */
+        /* 3. 핀 깜빡임 */
         @keyframes forcePulse { 0% { opacity: 1; transform: scale(1.1); } 50% { opacity: 0.1; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1.1); } }
         .witch-blink-pin { display: inline-block; margin-right: 12px; font-size: 1.2rem; animation: forcePulse 1.0s infinite ease-in-out !important; }
         
-        /* 4. 버튼 스타일 */
+        /* 4. 버튼 */
         .witch-delete-btn { background-color: #bf616a; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
         .witch-delete-btn:hover { background-color: #d08770; }
     </style>
 </head>
 <body>
 
+<!-- 초기 안내 팝업창 -->
 <div id="welcome-modal">
     <div class="modal-content">
-        <h2>🏰 검은마녀의탑 모니터링 시스템</h2>
-        <p id="modal-dresscode-info">최신 데이터를 불러오는 중입니다...</p>
+        <h2>🏰 검은마녀의탑 안내</h2>
+        <p id="modal-dresscode-info">데이터를 불러오는 중입니다...</p>
         <button onclick="this.parentElement.parentElement.style.display='none'" class="witch-delete-btn">확인</button>
     </div>
 </div>
@@ -51,29 +51,31 @@
 <div class="container">
     <h2>🏰 검은마녀의탑 모니터링 대시보드</h2>
     <div class="panel"><h3>📍 실시간 유저 깊이(Depth) 현황</h3><div id="user-depth-display">대기 중...</div></div>
-    <div class="panel"><h3>📜 실시간 트랜잭션 로그 (드래그 정렬 가능)</h3><div id="log-container"></div></div>
+    <div class="panel"><h3>📜 실시간 트랜잭션 로그</h3><div id="log-container"></div></div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // [필수] Supabase 설정 (본인 정보로 수정)
     const SUPABASE_URL = 'https://your-project-url.supabase.co';
     const SUPABASE_KEY = 'your-anon-key';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 초기 데이터 조회 및 팝업 연동
     async function initApp() {
+        // 데이터 로드
         const { data, error } = await supabaseClient
             .from('user_tracking')
             .select('*')
             .order('created_at', { ascending: false });
 
         if (data && data.length > 0) {
-            document.getElementById('modal-dresscode-info').innerText = `최신 입장 유저 드레스코드: ${data[0].dress_code || '미지정'}`;
+            // 팝업에 드레스코드 연동
+            document.getElementById('modal-dresscode-info').innerText = `최신 입장 유저의 드레스코드: ${data[0].dress_code || '미지정'}`;
             renderList(data);
         } else {
-            document.getElementById('modal-dresscode-info').innerText = "현재 입장한 유저가 없습니다.";
+            document.getElementById('modal-dresscode-info').innerText = "현재 기록된 유저 데이터가 없습니다.";
         }
+        
+        setupDragEngine();
     }
 
     function renderList(items) {
@@ -83,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (items[0]) document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth}m (유저: ${items[0].user_id})`;
     }
 
-    // 아이템 생성 (드레스코드 연동 + 드래그 설정)
     function createLogElement(item) {
         const logItem = document.createElement('div');
         logItem.className = 'witch-drag-item'; 
@@ -103,21 +104,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return logItem;
     }
 
-    // 삭제 실행 (팝업창 없이 즉시 삭제)
     window.deleteItem = async (id) => {
         await supabaseClient.from('user_tracking').delete().eq('id', id);
         document.getElementById(`pin-${id}`)?.remove();
     };
 
-    // 드래그 정렬 엔진
-    const logContainer = document.getElementById('log-container');
-    logContainer.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const dragging = document.querySelector('.wt-dragging');
-        const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
-        const next = siblings.find(sib => e.clientY <= sib.getBoundingClientRect().top + sib.offsetHeight / 2);
-        logContainer.insertBefore(dragging, next);
-    });
+    function setupDragEngine() {
+        const logContainer = document.getElementById('log-container');
+        logContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const dragging = document.querySelector('.wt-dragging');
+            const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
+            const next = siblings.find(sib => e.clientY <= sib.getBoundingClientRect().top + sib.offsetHeight / 2);
+            logContainer.insertBefore(dragging, next);
+        });
+    }
 
     initApp();
 });
