@@ -1,71 +1,82 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>검은 마녀의 탑 실시간 위치</title>
-<style>
-* { box-sizing: border-box; }
-body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; font-size: 14px; }
-.page { max-width: 1000px; margin: 0 auto; padding: 10px; }
-.page-title { font-size: 26px; font-weight: bold; text-align: center; margin-bottom: 18px; }
-.board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.tabs { display: flex; gap: 6px; }
-.tab-btn { border: none; border-radius: 8px; padding: 9px 14px; background: #d1d5db; color: #111827; font-size: 14px; cursor: pointer; }
-.tab-btn.active { background: #2563eb; color: #fff; }
-.refresh-btn { border: none; border-radius: 8px; padding: 9px 14px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
-.board-wrap { background: #fff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; }
-.image-wrap { position: relative; width: 100%; background: #fff; line-height: 0; cursor: crosshair; touch-action: none; }
-.image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
-.pin-layer { position: absolute; inset: 0; pointer-events: none; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>검은마녀의탑 - 실시간 위치 및 로그 추적</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* 깃허브 원본 블랙 레이아웃 스타일 및 확장 */
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; margin: 0; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h2, h3 { margin-top: 0; color: #fff; }
+        
+        .panel { border: 1px solid #333; padding: 15px; margin-bottom: 15px; background: #222; border-radius: 6px; }
+        .log-entry { font-family: monospace; font-size: 0.9rem; color: #a3be8c; border-bottom: 1px solid #333; padding: 6px 0; }
+        .log-entry:last-child { border-bottom: none; }
+        .error-msg { color: #bf616a; font-weight: bold; }
 
-/* ⚡ 핀 디자인 및 애니메이션 */
-.pin { 
-    position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
-    border: 2px solid #fff; border-radius: 50%; background: #dc2626; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.28); cursor: grab; z-index: 2;
-    pointer-events: auto; touch-action: none;
-    animation: blink-effect 1.5s infinite; 
-}
-.pin:active { cursor: grabbing; animation: none; opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
-@keyframes blink-effect {
-    0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.1); }
-    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
+        /* 프로필 및 컨트롤러 스타일 */
+        .profile-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #2b2b2b; border: 1px solid #333; border-radius: 6px; margin-bottom: 15px; }
+        .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .tabs { display: flex; gap: 6px; }
+        
+        /* 버튼 스타일 군 */
+        .tab-btn { border: none; border-radius: 6px; padding: 9px 14px; background: #333; color: #fff; font-size: 14px; cursor: pointer; }
+        .tab-btn.active { background: #2563eb; font-weight: bold; }
+        .refresh-btn { border: none; border-radius: 6px; padding: 9px 14px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
+        .btn { border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+        .btn-blue { background: #2563eb; color: #fff; }
+        .btn-red { background: #dc2626; color: #fff; margin-right: auto; }
+        .btn-gray { background: #444; color: #fff; }
+        .btn-delete-direct { border: none; border-radius: 4px; background: #dc2626; color: #fff; padding: 4px 8px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 
-.section { margin-top: 10px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px; }
-.section-title { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
-.pin-list { display: flex; flex-direction: column; }
-.pin-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; gap: 10px; }
-.pin-item:last-child { border-bottom: none; }
-.pin-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+        /* 지도 및 핀 레이어 */
+        .board-wrap { background: #000; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
+        .image-wrap { position: relative; width: 100%; line-height: 0; cursor: crosshair; touch-action: none; }
+        .image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+        .pin-layer { position: absolute; inset: 0; pointer-events: none; }
 
-.btn-delete-direct { border: none; border-radius: 6px; background: #dc2626; color: #fff; padding: 6px 12px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+        /* ⚡ 실시간 핀 깜빡임 및 드래그 디자인 */
+        .pin { 
+            position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
+            border: 2px solid #fff; border-radius: 50%; background: #dc2626; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5); cursor: grab; z-index: 2;
+            pointer-events: auto; touch-action: none;
+            animation: blink-effect 1.5s infinite; 
+        }
+        .pin:active { cursor: grabbing; animation: none; opacity: 0.9; transform: translate(-50%, -50%) scale(1.2); }
+        @keyframes blink-effect {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.4; transform: translate(-50%, -50%) scale(1.1); }
+            100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
 
-.modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
-.modal { width: 100%; max-width: 340px; background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.22); }
-.modal h3 { margin: 0 0 12px 0; font-size: 16px; }
-.form-row { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; margin-bottom: 10px; }
-.form-row label { font-size: 13px; font-weight: bold; }
-.form-row input, .form-row select { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 6px; }
-.view-value { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; font-size: 13px; }
-.modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-.btn { border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-.btn-blue { background: #2563eb; color: #fff; }
-.btn-red { background: #dc2626; color: #fff; margin-right: auto; }
-.btn-gray { background: #d1d5db; color: #111827; }
-.profile-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; margin-bottom: 12px; }
-.profile-item { font-size: 15px; font-weight: bold; }
-</style>
+        /* 핀 리스트 스타일 */
+        .pin-list { display: flex; flex-direction: column; max-height: 200px; overflow-y: auto; }
+        .pin-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; gap: 10px; font-size: 13px; }
+        .pin-item:last-child { border-bottom: none; }
+        .pin-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 모달 팝업 스타일 (다크테마 공통) */
+        .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 1000; padding: 16px; }
+        .modal { width: 100%; max-width: 340px; background: #222; border: 1px solid #333; border-radius: 6px; padding: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.5); color: #fff; }
+        .modal h3 { margin: 0 0 12px 0; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 6px; }
+        .form-row { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 6px; margin-bottom: 10px; }
+        .form-row label { font-size: 13px; font-weight: bold; color: #ccc; }
+        .form-row input, .form-row select { width: 100%; padding: 8px; font-size: 14px; border: 1px solid #444; border-radius: 4px; background: #333; color: #fff; }
+        .view-value { padding: 8px; border: 1px solid #444; border-radius: 4px; background: #2b2b2b; font-size: 13px; color: #a3be8c; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    </style>
 </head>
 <body>
-<div class="page">
-    <div class="page-title" id="mainTitle">검은 마녀의 탑 위치 현황</div>
+
+<div class="container">
+    <h2 id="mainTitle">🏰 검은마녀의탑 모니터링 대시보드</h2>
     
     <div class="profile-bar">
-        <div class="profile-item">드레스코드 : <span id="dressCodeText" style="color:#2563eb;">-</span></div>
-        <button type="button" class="btn btn-blue" id="profileEditBtn">수정</button>
+        <div style="font-size: 15px; font-weight: bold;">드레스코드 : <span id="dressCodeText" style="color:#81a1c1;">-</span></div>
+        <button type="button" class="btn btn-blue" id="profileEditBtn" style="padding: 5px 10px;">수정</button>
     </div>
 
     <div class="board-controls">
@@ -76,23 +87,35 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
         <button type="button" class="refresh-btn" id="refreshBtn">새로고침</button>
     </div>
 
-    <div class="board-wrap">
-        <div class="image-wrap" id="imageWrap">
-            <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="지도 배경">
-            <div class="pin-layer" id="pinLayer"></div>
+    <div class="panel" style="padding: 10px;">
+        <div class="board-wrap">
+            <div class="image-wrap" id="imageWrap">
+                <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="지도 배경">
+                <div class="pin-layer" id="pinLayer"></div>
+            </div>
         </div>
     </div>
 
-    <div class="section">
-        <div class="section-title" id="listTitle">1층 핀 목록</div>
+    <div class="panel">
+        <h3 id="listTitle">📍 1층 실시간 위치 목록</h3>
         <div class="pin-list" id="pinList"></div>
+    </div>
+    
+    <div class="panel">
+        <h3>📍 실시간 유저 깊이(Depth) 현황</h3>
+        <div id="user-depth-display">데이터를 불러오는 중...</div>
+    </div>
+
+    <div class="panel">
+        <h3>📜 실시간 트랜잭션 로그</h3>
+        <div id="log-container">로그가 이곳에 표시됩니다.</div>
     </div>
 </div>
 
 <div class="modal-backdrop" id="introModalBackdrop">
     <div class="modal">
         <h3>🏰 오늘의 드레스코드</h3>
-        <div id="introDressCodeText" style="padding:15px; background:#eff6ff; border:1px solid #bfdbfe; font-weight:bold; color:#1e40af; text-align:center; font-size:18px; margin:10px 0;"></div>
+        <div id="introDressCodeText" style="padding:15px; background:#2b2b2b; border:1px solid #444; font-weight:bold; color:#81a1c1; text-align:center; font-size:18px; margin:10px 0; border-radius:4px;"></div>
         <div class="modal-buttons"><button class="btn btn-blue" id="introConfirmBtn" style="width:100%;">확인</button></div>
     </div>
 </div>
@@ -139,7 +162,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 <div class="modal-backdrop" id="profileModalBackdrop">
     <div class="modal">
         <h3>드레스코드 수정</h3>
-        <div class="form-row"><label>코드 :</label><input type="text" id="dressCodeInput" placeholder="입력하세요"></div>
+        <div class="form-row"><label>코드 :</label><input type="text" id="dressCodeInput" placeholder="코드를 입력하세요"></div>
         <div class="modal-buttons">
             <button class="btn btn-gray" id="profileCancelBtn">취소</button>
             <button class="btn btn-blue" id="profileSaveBtn">저장</button>
@@ -147,9 +170,9 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // Supabase 설정 데이터 연동
     const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
     
@@ -158,24 +181,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const PROFILE_TBL = isMatop ? 'matop_profile' : 'tower_profile';
     
     const mainTitle = document.getElementById('mainTitle');
-    if (mainTitle) mainTitle.textContent = isMatop ? '마력의 탑 위치 현황' : '검은 마녀의 탑 위치 현황';
+    if (mainTitle) mainTitle.textContent = isMatop ? '🏰 마력의 탑 모니터링 대시보드' : '🏰 검은마녀의탑 모니터링 대시보드';
 
-    let supabase = null;
+    let supabaseClient;
     let currentBoard = 'floor1';
     let pins = [];
     let pendingPoint = null;
     let selectedPin = null;
 
-    if (window.supabase) {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        loadData(true);
-        supabase.channel('realtime').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadData(false)).subscribe();
-        supabase.channel('realtime_profile').on('postgres_changes', { event: '*', schema: 'public', table: PROFILE_TBL }, () => loadData(false)).subscribe();
+    try {
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log('✅ Supabase 클라이언트 초기화 성공');
+            initApp();
+        } else {
+            throw new Error('Supabase 라이브러리가 로드되지 않았습니다.');
+        }
+    } catch (error) {
+        console.error('❌ 초기화 실패:', error.message);
+        document.getElementById('user-depth-display').innerHTML = `<span class="error-msg">연결 실패: ${error.message}</span>`;
+        return;
     }
 
-    async function loadData(showIntro = false) {
-        const { data: p } = await supabase.from(PINS_TBL).select('*').order('created_at', { ascending: true });
-        const { data: pr } = await supabase.from(PROFILE_TBL).select('dress_code').eq('id', 1).maybeSingle();
+    function initApp() {
+        // 지도 및 프로필 로드
+        loadMapData(true);
+        // 기존 유저 깊이 데이터 로드 (원본 로직)
+        fetchInitialData();
+        
+        // 실시간 채널 통합 활성화
+        supabaseClient.channel('map-changes').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadMapData(false)).subscribe();
+        supabaseClient.channel('profile-changes').on('postgres_changes', { event: '*', schema: 'public', table: PROFILE_TBL }, () => loadMapData(false)).subscribe();
+        
+        // 기존 트랙킹 실시간 채널 구독 (원본 로직)
+        supabaseClient.channel('witch-tower-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'user_tracking' }, (payload) => {
+                console.log('🔄 실시간 데이터 변동 감지:', payload);
+                handleRealtimeUpdate(payload);
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('📡 실시간 트랙킹 로그 채널 구독 성공');
+                }
+            });
+    }
+
+    // 지도 및 핀 정보 데이터 호출
+    async function loadMapData(showIntro = false) {
+        const { data: p } = await supabaseClient.from(PINS_TBL).select('*').order('created_at', { ascending: true });
+        const { data: pr } = await supabaseClient.from(PROFILE_TBL).select('dress_code').eq('id', 1).maybeSingle();
         
         pins = p || [];
         const currentDressCode = pr?.dress_code || '미설정';
@@ -185,23 +239,24 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('introDressCodeText').textContent = currentDressCode;
             document.getElementById('introModalBackdrop').style.display = 'flex';
         }
-        render();
+        renderMap();
     }
 
-    function render() {
+    // ⚡ 실시간 깜빡임 및 드래그 앤 드롭 핀 렌더링 시스템
+    function renderMap() {
         const list = document.getElementById('pinList');
         const layer = document.getElementById('pinLayer');
         const img = document.getElementById('bgImage');
         const rect = img.getBoundingClientRect();
         
-        document.getElementById('listTitle').textContent = currentBoard === 'floor1' ? '1층 핀 목록' : '2층 핀 목록';
+        document.getElementById('listTitle').textContent = currentBoard === 'floor1' ? '📍 1층 실시간 위치 목록' : '📍 2층 실시간 위치 목록';
         layer.innerHTML = '';
         list.innerHTML = '';
         
         const filtered = pins.filter(p => p.board_id === currentBoard);
         
         if (filtered.length === 0) {
-            list.innerHTML = '<div style="color: #6b7280; font-size: 13px; padding: 6px 0;">등록된 핀이 없습니다.</div>';
+            list.innerHTML = '<div style="color: #6b7280; font-size: 13px; padding: 6px 0;">등록된 실시간 위치가 없습니다.</div>';
         }
 
         filtered.forEach((p, i) => {
@@ -216,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.style.left = (p.x_ratio * rect.width) + 'px';
             btn.style.top = (p.y_ratio * rect.height) + 'px';
             
-            // 드래그 앤 드롭 기능
+            // 드래그 기능 구현 (PC 마우스 및 모바일 터치 완벽 대응)
             const handleDragStart = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -248,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let finalXRatio = (clientX - img.getBoundingClientRect().left) / img.getBoundingClientRect().width;
                         let finalYRatio = (clientY - img.getBoundingClientRect().top) / img.getBoundingClientRect().height;
                         
-                        await supabase.from(PINS_TBL).update({
+                        await supabaseClient.from(PINS_TBL).update({
                             x_ratio: Math.max(0, Math.min(finalXRatio, 1)),
                             y_ratio: Math.max(0, Math.min(finalYRatio, 1))
                         }).eq('id', p.id);
@@ -272,12 +327,67 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 핀 바로 삭제 기능
     window.deletePin = async (id) => {
-        if (!confirm('이 핀을 삭제하시겠습니까?')) return;
-        await supabase.from(PINS_TBL).delete().eq('id', id);
-        loadData(false);
+        if (!confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData(false);
     };
 
+    // 기존 원본 대시보드 로직 (유저 깊이 추적 및 트랜잭션 로그)
+    async function fetchInitialData() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('user_tracking')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                renderInitialList(data);
+            } else {
+                document.getElementById('user-depth-display').innerText = '현재 기록된 데이터가 없습니다.';
+            }
+        } catch (err) {
+            console.error('❌ 초기 데이터 조회 오류:', err.message);
+        }
+    }
+
+    function handleRealtimeUpdate(payload) {
+        const logContainer = document.getElementById('log-container');
+        const eventType = payload.eventType;
+        const newData = payload.new;
+        
+        const logItem = document.createElement('div');
+        logItem.className = 'log-entry';
+        logItem.innerText = `[${eventType}] 유저 ID: ${newData.user_id || 'N/A'} | 현재 깊이: ${newData.depth || 0}m (${new Date().toLocaleTimeString()})`;
+        
+        logContainer.insertBefore(logItem, logContainer.firstChild);
+
+        if (eventType === 'UPDATE' || eventType === 'INSERT') {
+            document.getElementById('user-depth-display').innerText = `현재 깊이: ${newData.depth || 0}m (유저: ${newData.user_id})`;
+        }
+    }
+
+    function renderInitialList(items) {
+        const logContainer = document.getElementById('log-container');
+        logContainer.innerHTML = ''; 
+        
+        items.forEach(item => {
+            const logItem = document.createElement('div');
+            logItem.className = 'log-entry';
+            logItem.innerText = `[기존 기록] 유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
+            logContainer.appendChild(logItem);
+        });
+        
+        if (items[0]) {
+            document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth || 0}m (유저: ${items[0].user_id})`;
+        }
+    }
+
+    // 모달 및 버튼 이벤트 리스너 정의
     document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
     document.getElementById('introConfirmBtn').onclick = () => document.getElementById('introModalBackdrop').style.display = 'none';
     document.getElementById('cancelCreateBtn').onclick = () => document.getElementById('createModalBackdrop').style.display = 'none';
@@ -290,57 +400,51 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     document.getElementById('profileSaveBtn').onclick = async () => {
-        await supabase.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
-        loadData(false);
+        await supabaseClient.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
+        loadMapData(false);
         document.getElementById('profileModalBackdrop').style.display = 'none';
     };
 
-    document.getElementById('imageWrap').onmousedown = (e) => {
-        if (e.target.id !== 'bgImage') return;
-        const rect = e.target.getBoundingClientRect();
-        pendingPoint = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
-        document.getElementById('pinName').value = '';
-        document.getElementById('pinWeapon').selectedIndex = 0;
-        document.getElementById('createModalBackdrop').style.display = 'flex';
-    };
-    // 모바일 터치로 핀 추가
-    document.getElementById('imageWrap').ontouchstart = (e) => {
-        if (e.target.id !== 'bgImage') return;
-        const rect = e.target.getBoundingClientRect();
-        const touch = e.touches[0];
-        pendingPoint = { x: (touch.clientX - rect.left) / rect.width, y: (touch.clientY - rect.top) / rect.height };
+    // 맵 빈곳 클릭/터치 시 새 핀 등록 프로세스 활성화
+    const registerPoint = (clientX, clientY, target) => {
+        const rect = target.getBoundingClientRect();
+        pendingPoint = { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
         document.getElementById('pinName').value = '';
         document.getElementById('pinWeapon').selectedIndex = 0;
         document.getElementById('createModalBackdrop').style.display = 'flex';
     };
 
+    document.getElementById('imageWrap').onmousedown = (e) => { if (e.target.id === 'bgImage') registerPoint(e.clientX, e.clientY, e.target); };
+    document.getElementById('imageWrap').ontouchstart = (e) => { if (e.target.id === 'bgImage') registerPoint(e.touches[0].clientX, e.touches[0].clientY, e.target); };
+
     document.getElementById('saveBtn').onclick = async () => {
         if (!pendingPoint) return;
-        await supabase.from(PINS_TBL).insert({ 
+        await supabaseClient.from(PINS_TBL).insert({ 
             board_id: currentBoard, x_ratio: pendingPoint.x, y_ratio: pendingPoint.y, 
             name: `이름 : ${document.getElementById('pinName').value.trim() || '무명'} / 무기 : ${document.getElementById('pinWeapon').value}` 
         });
         document.getElementById('createModalBackdrop').style.display = 'none';
-        loadData(false);
+        loadMapData(false);
     };
 
     document.getElementById('deleteBtn').onclick = async () => {
-        if (!selectedPin || !confirm('이 핀을 삭제하시겠습니까?')) return;
-        await supabase.from(PINS_TBL).delete().eq('id', selectedPin.id);
+        if (!selectedPin || !confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', selectedPin.id);
         document.getElementById('viewModalBackdrop').style.display = 'none';
-        loadData(false);
+        loadMapData(false);
     };
 
+    // 층간 탭 전환 시스템
     document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         e.target.classList.add('active');
         currentBoard = e.target.dataset.id;
         document.getElementById('bgImage').src = currentBoard === 'floor1' ? 'https://i.ibb.co/0RST75vn/1.png' : 'https://i.ibb.co/MD9V69Vm/2.png';
-        document.getElementById('bgImage').onload = render;
-        render(); 
+        document.getElementById('bgImage').onload = renderMap;
+        renderMap(); 
     });
 
-    document.getElementById('refreshBtn').onclick = () => loadData(false);
+    document.getElementById('refreshBtn').onclick = () => { loadMapData(false); fetchInitialData(); };
 });
 </script>
 </body>
