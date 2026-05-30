@@ -3,124 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>검은마녀의탑 - 최종 통합 대시보드</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>검은 마녀의 탑 실시간 위치</title>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .panel { border: 1px solid #333; padding: 15px; margin-bottom: 10px; background: #222; border-radius: 6px; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; font-size: 14px; }
+        .page { max-width: 1000px; margin: 0 auto; padding: 10px; }
+        .page-title { font-size: 26px; font-weight: bold; text-align: center; margin-bottom: 18px; }
         
-        /* 1. 초기 안내 팝업 스타일 */
-        #welcome-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000;
+        .info-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; margin-bottom: 12px; }
+        .dress-code-text { font-size: 16px; font-weight: 600; color: #2563eb; }
+        
+        .board-wrap { background: #fff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; position: relative; }
+        .image-wrap { position: relative; width: 100%; line-height: 0; }
+        
+        /* ⚡ 깜빡이는 핀 애니메이션 */
+        .pin { 
+            position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
+            border: 2px solid #fff; border-radius: 50%; background: #dc2626; cursor: pointer; z-index: 2;
+            animation: blink-effect 1.5s infinite;
         }
-        .modal-content { background: #2a2a2a; padding: 30px; border-radius: 10px; border: 1px solid #ebcb8b; text-align: center; }
-        
-        /* 2. 로그 및 드래그 스타일 */
-        #log-container { display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 10px 0; }
-        .witch-drag-item { 
-            display: flex; justify-content: space-between; align-items: center;
-            font-family: monospace; font-size: 0.95rem; color: #a3be8c; 
-            border: 1px solid #444; background-color: #25282a; border-radius: 6px; padding: 14px; 
-            cursor: grab; touch-action: none; transition: background-color 0.2s;
+        @keyframes blink-effect {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
-        .witch-drag-item.wt-dragging { opacity: 0.3 !important; border: 2px dashed #ebcb8b !important; }
-        .witch-item-content { display: flex; align-items: center; pointer-events: none; user-select: none; }
-        
-        /* 3. 핀 깜빡임 */
-        @keyframes forcePulse { 0% { opacity: 1; transform: scale(1.1); } 50% { opacity: 0.1; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1.1); } }
-        .witch-blink-pin { display: inline-block; margin-right: 12px; font-size: 1.2rem; animation: forcePulse 1.0s infinite ease-in-out !important; }
-        
-        /* 4. 버튼 */
-        .witch-delete-btn { background-color: #bf616a; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
-        .witch-delete-btn:hover { background-color: #d08770; }
+
+        .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
+        .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 24px rgba(0,0,0,0.22); text-align: center; }
+        .btn-blue { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 10px; width: 100%; cursor: pointer; margin-top: 15px; }
     </style>
 </head>
 <body>
 
-<!-- 초기 안내 팝업창 -->
-<div id="welcome-modal">
-    <div class="modal-content">
-        <h2>🏰 검은마녀의탑 안내</h2>
-        <p id="modal-dresscode-info">데이터를 불러오는 중입니다...</p>
-        <button onclick="this.parentElement.parentElement.style.display='none'" class="witch-delete-btn">확인</button>
+<div class="page">
+    <div class="page-title">검은 마녀의 탑 위치 현황</div>
+    
+    <div class="info-bar">
+        <div><strong>오늘의 드레스코드 :</strong> <span id="dressCodeText" class="dress-code-text">-</span></div>
+    </div>
+    
+    <div class="board-wrap">
+        <div class="image-wrap" id="imageWrap">
+            <div class="pin-layer" id="pinLayer"></div>
+        </div>
     </div>
 </div>
 
-<div class="container">
-    <h2>🏰 검은마녀의탑 모니터링 대시보드</h2>
-    <div class="panel"><h3>📍 실시간 유저 깊이(Depth) 현황</h3><div id="user-depth-display">대기 중...</div></div>
-    <div class="panel"><h3>📜 실시간 트랜잭션 로그</h3><div id="log-container"></div></div>
+<div class="modal-backdrop" id="introModalBackdrop">
+    <div class="modal">
+        <h3>🏰 오늘의 드레스코드 안내</h3>
+        <p>오늘의 드레스코드를 확인해주세요!</p>
+        <div style="padding: 15px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 18px; font-weight: bold; color: #1e40af; margin: 10px 0;">
+            <span id="introDressCodeText">불러오는 중...</span>
+        </div>
+        <button class="btn-blue" id="introConfirmBtn">확인 완료</button>
+    </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const SUPABASE_URL = 'https://your-project-url.supabase.co';
-    const SUPABASE_KEY = 'your-anon-key';
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+document.addEventListener('DOMContentLoaded', async function () {
+    const supabaseClient = supabase.createClient('URL', 'KEY'); // 키 입력 필요
 
-    async function initApp() {
-        // 데이터 로드
-        const { data, error } = await supabaseClient
-            .from('user_tracking')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (data && data.length > 0) {
-            // 팝업에 드레스코드 연동
-            document.getElementById('modal-dresscode-info').innerText = `최신 입장 유저의 드레스코드: ${data[0].dress_code || '미지정'}`;
-            renderList(data);
-        } else {
-            document.getElementById('modal-dresscode-info').innerText = "현재 기록된 유저 데이터가 없습니다.";
-        }
+    // 데이터 로드 및 팝업/화면 연동
+    async function init() {
+        const { data } = await supabaseClient.from('tower_profile').select('dress_code').eq('id', 1).maybeSingle();
+        const code = data?.dress_code || '설정 필요';
         
-        setupDragEngine();
+        document.getElementById('dressCodeText').textContent = code;
+        document.getElementById('introDressCodeText').textContent = code;
+        document.getElementById('introModalBackdrop').style.display = 'flex';
     }
 
-    function renderList(items) {
-        const logContainer = document.getElementById('log-container');
-        logContainer.innerHTML = ''; 
-        items.forEach(item => logContainer.appendChild(createLogElement(item)));
-        if (items[0]) document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth}m (유저: ${items[0].user_id})`;
-    }
+    document.getElementById('introConfirmBtn').addEventListener('click', () => {
+        document.getElementById('introModalBackdrop').style.display = 'none';
+    });
 
-    function createLogElement(item) {
-        const logItem = document.createElement('div');
-        logItem.className = 'witch-drag-item'; 
-        logItem.draggable = true; 
-        logItem.id = `pin-${item.id}`;
-        
-        logItem.addEventListener('dragstart', () => logItem.classList.add('wt-dragging'));
-        logItem.addEventListener('dragend', () => logItem.classList.remove('wt-dragging'));
-        
-        logItem.innerHTML = `
-            <div class="witch-item-content">
-                <span class="witch-blink-pin">📌</span>
-                <span>유저 ID: ${item.user_id} | 깊이: ${item.depth}m | 드레스코드: ${item.dress_code || '미지정'}</span>
-            </div>
-            <button class="witch-delete-btn" onclick="deleteItem('${item.id}')">삭제</button>
-        `;
-        return logItem;
-    }
-
-    window.deleteItem = async (id) => {
-        await supabaseClient.from('user_tracking').delete().eq('id', id);
-        document.getElementById(`pin-${id}`)?.remove();
-    };
-
-    function setupDragEngine() {
-        const logContainer = document.getElementById('log-container');
-        logContainer.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const dragging = document.querySelector('.wt-dragging');
-            const siblings = [...logContainer.querySelectorAll('.witch-drag-item:not(.wt-dragging)')];
-            const next = siblings.find(sib => e.clientY <= sib.getBoundingClientRect().top + sib.offsetHeight / 2);
-            logContainer.insertBefore(dragging, next);
-        });
-    }
-
-    initApp();
+    init();
 });
 </script>
 </body>
