@@ -1,86 +1,89 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>검은 마녀의 탑 실시간 위치</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; font-size: 14px; }
-        .page { max-width: 1000px; margin: 0 auto; padding: 10px; }
-        .page-title { font-size: 26px; font-weight: bold; text-align: center; margin-bottom: 18px; }
-        
-        .info-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; margin-bottom: 12px; }
-        .dress-code-text { font-size: 16px; font-weight: 600; color: #2563eb; }
-        
-        .board-wrap { background: #fff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; position: relative; }
-        .image-wrap { position: relative; width: 100%; line-height: 0; }
-        
-        /* ⚡ 깜빡이는 핀 애니메이션 */
-        .pin { 
-            position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
-            border: 2px solid #fff; border-radius: 50%; background: #dc2626; cursor: pointer; z-index: 2;
-            animation: blink-effect 1.5s infinite;
-        }
-        @keyframes blink-effect {
-            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.2); }
-            100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        }
-
-        .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
-        .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 24px rgba(0,0,0,0.22); text-align: center; }
-        .btn-blue { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 10px; width: 100%; cursor: pointer; margin-top: 15px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>검은 마녀의 탑 실시간 위치</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; padding: 10px; }
+    .page { max-width: 1000px; margin: 0 auto; }
+    .page-title { font-size: 26px; font-weight: bold; text-align: center; margin-bottom: 18px; }
+    
+    /* 상단 정보 바 */
+    .info-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; margin-bottom: 12px; }
+    .dress-code-box { font-size: 16px; font-weight: bold; color: #dc2626; }
+    
+    /* 핀 스타일 및 깜빡임 효과 */
+    .pin { position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: #dc2626; box-shadow: 0 2px 6px rgba(0,0,0,0.28); cursor: pointer; z-index: 2; animation: blink-effect 1.5s infinite; }
+    @keyframes blink-effect { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.2); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+    
+    /* 모달 스타일 */
+    .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
+    .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 24px rgba(0,0,0,0.22); text-align: center; }
+    .btn-blue { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 10px; width: 100%; cursor: pointer; margin-top: 15px; }
+    .image-wrap { position: relative; width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; cursor: crosshair; }
+    .image-wrap img { width: 100%; display: block; }
+</style>
 </head>
 <body>
 
 <div class="page">
-    <div class="page-title">검은 마녀의 탑 위치 현황</div>
+    <div class="page-title">검은 마녀의 탑 실시간 위치</div>
     
     <div class="info-bar">
-        <div><strong>오늘의 드레스코드 :</strong> <span id="dressCodeText" class="dress-code-text">-</span></div>
+        <div><strong>오늘의 드레스코드 :</strong> <span id="dressCodeText" class="dress-code-box">-</span></div>
+        <button type="button" id="editBtn">수정</button>
     </div>
-    
+
     <div class="board-wrap">
         <div class="image-wrap" id="imageWrap">
+            <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="배경">
             <div class="pin-layer" id="pinLayer"></div>
         </div>
     </div>
 </div>
 
-<div class="modal-backdrop" id="introModalBackdrop">
+<!-- 안내 팝업 -->
+<div class="modal-backdrop" id="introModalBackdrop" style="display: flex;">
     <div class="modal">
-        <h3>🏰 오늘의 드레스코드 안내</h3>
-        <p>오늘의 드레스코드를 확인해주세요!</p>
-        <div style="padding: 15px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 18px; font-weight: bold; color: #1e40af; margin: 10px 0;">
-            <span id="introDressCodeText">불러오는 중...</span>
+        <h3>🏰 오늘의 드레스코드</h3>
+        <div style="padding: 15px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; font-size: 18px; font-weight: bold; color: #b91c1c; margin: 15px 0;">
+            <span id="introDressCodeText">로딩 중...</span>
         </div>
-        <button class="btn-blue" id="introConfirmBtn">확인 완료</button>
+        <button class="btn-blue" id="introConfirmBtn">확인</button>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', async function () {
-    const supabaseClient = supabase.createClient('URL', 'KEY'); // 키 입력 필요
+    // Supabase 설정
+    const supabaseClient = supabase.createClient('URL', 'KEY');
 
-    // 데이터 로드 및 팝업/화면 연동
-    async function init() {
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 1. 드레스코드 데이터 불러오기
         const { data } = await supabaseClient.from('tower_profile').select('dress_code').eq('id', 1).maybeSingle();
         const code = data?.dress_code || '설정 필요';
         
+        // 2. 화면 반영
         document.getElementById('dressCodeText').textContent = code;
         document.getElementById('introDressCodeText').textContent = code;
-        document.getElementById('introModalBackdrop').style.display = 'flex';
-    }
+        
+        // 3. 안내 팝업 이벤트
+        document.getElementById('introConfirmBtn').addEventListener('click', () => {
+            document.getElementById('introModalBackdrop').style.display = 'none';
+        });
 
-    document.getElementById('introConfirmBtn').addEventListener('click', () => {
-        document.getElementById('introModalBackdrop').style.display = 'none';
+        // 4. 실시간 핀 로직 (이곳에 기존의 loadPins, renderPins, click 이벤트 등 작성)
+        // 예시: 핀 생성 함수
+        function createPin(x, y) {
+            const pin = document.createElement('div');
+            pin.className = 'pin';
+            pin.style.left = x + '%';
+            pin.style.top = y + '%';
+            document.getElementById('pinLayer').appendChild(pin);
+        }
     });
-
-    init();
-});
 </script>
 </body>
 </html>
