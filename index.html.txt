@@ -3,15 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>검은마녀의탑 - 실시간 위치 및 로그 추적</title>
+    <title>검은마녀의탑 - 실시간 모니터링 및 드래그 정렬</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 기존 깃허브 원본 레이아웃 및 스타일 유지 */
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
         .panel { border: 1px solid #333; padding: 15px; margin-bottom: 10px; background: #222; border-radius: 6px; }
-        .log-entry { font-family: monospace; font-size: 0.9rem; color: #a3be8c; border-bottom: 1px solid #333; padding: 6px 0; }
+        
+        /* 로그 컨테이너 */
+        #log-container { display: flex; flex-direction: column; gap: 6px; }
+
+        /* 로그 아이템 스타일 */
+        .log-entry { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: monospace; 
+            font-size: 0.9rem; 
+            color: #a3be8c; 
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+            border-radius: 4px;
+            padding: 10px; 
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        
+        /* 🔥 [추가] 드래그 중일 때의 스타일 힌트 */
+        .log-entry.dragging {
+            opacity: 0.5;
+            border: 1px dashed #ebcb8b;
+            background-color: #3b4252;
+        }
+
+        .log-content {
+            display: flex;
+            align-items: center;
+            user-select: none; /* 드래그 시 텍스트 블록 지정 방지 */
+        }
+
+        /* 핀 깜빡임 애니메이션 */
+        @keyframes pinPulse {
+            0% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 2px #ff5555); }
+            50% { opacity: 0.3; transform: scale(0.95); filter: drop-shadow(0 0 0px transparent); }
+            100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 2px #ff5555); }
+        }
+
+        /* 깜빡이는 핀 아이콘 스타일 (드래그 가능 표시) */
+        .blinking-pin {
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 1.1rem;
+            animation: pinPulse 1.2s infinite ease-in-out;
+            cursor: grab; /* 🔥 잡을 수 있음을 나타내는 손모양 커서 */
+        }
+        .blinking-pin:active {
+            cursor: grabbing; /* 🔥 클릭하여 끄는 중일 때 커서 */
+        }
+
         .error-msg { color: #bf616a; font-weight: bold; }
+        
+        /* 즉시 삭제 버튼 스타일 */
+        .delete-btn {
+            background-color: #bf616a;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .delete-btn:hover { background-color: #d08770; }
+        .delete-btn:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -25,32 +88,28 @@
     </div>
 
     <div class="panel">
-        <h3>📜 실시간 트랜잭션 로그</h3>
+        <h3>📜 실시간 트랜잭션 로그 (드래그하여 순서 조정 가능)</h3>
         <div id="log-container">로그가 이곳에 표시됩니다.</div>
     </div>
 </div>
 
 <script>
-// 2. DOMContentLoaded 이벤트를 통해 DOM 및 CDN 로드가 완료된 시점에 코드 실행
 document.addEventListener('DOMContentLoaded', () => {
     
     // [필수 변수 설정] 본인의 실제 Supabase URL과 Anon KEY로 대체하세요
     const SUPABASE_URL = 'https://your-project-url.supabase.co';
     const SUPABASE_KEY = 'your-anon-key';
 
-    // 스코프 충돌을 방지하기 위해 고유한 변수명 사용
     let supabaseClient;
 
+    // 1. Supabase 클라이언트 초기화 및 예외 처리
     try {
-        // 라이브러리 로드 상태를 검증한 후 초기화 진행
         if (typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            console.log('✅ Supabase 클라이언트 초기화 성공');
-            
-            // 안전하게 앱 초기화 및 실시간 연동 시작
+            console.log('-- Supabase 클라이언트 초기화 성공');
             initApp();
         } else {
-            throw new Error('Supabase 라이브러리가 로드되지 않았습니다. CDN 주소를 확인해주세요.');
+            throw new Error('Supabase 라이브러리 로드 실패');
         }
     } catch (error) {
         console.error('❌ 초기화 실패:', error.message);
@@ -58,93 +117,164 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // 메인 로직 실행 함수
+    // 2. 실시간 채널 구동 및 드래그 이벤트 컨테이너 바인딩
     function initApp() {
-        // 앱이 켜지자마자 기존 데이터 가져오기
-        fetchInitialData();
+        fetchInitialData(); 
+        setupDragContainer(); // 드래그 앤 드롭 이정표 설정
         
-        // 3. 실시간 변경 사항 감지 채널 구성 및 SUBSCRIBED 상태 검증
-        const trackingChannel = supabaseClient
+        supabaseClient
             .channel('witch-tower-changes')
             .on(
                 'postgres_changes',
-                {
-                    event: '*', // INSERT, UPDATE, DELETE 전체 실시간 감지
-                    schema: 'public',
-                    table: 'user_tracking' // 본인의 실시간 추적 대상 테이블명으로 수정
-                },
+                { event: '*', schema: 'public', table: 'user_tracking' },
                 (payload) => {
-                    console.log('🔄 실시간 데이터 변동 감지:', payload);
+                    console.log('🔄 실시간 변동 감지:', payload);
                     handleRealtimeUpdate(payload);
                 }
             )
             .subscribe((status) => {
-                // 소켓 연결 수립 상태를 안전하게 확인하여 준비되지 않은 접근 방어
                 if (status === 'SUBSCRIBED') {
-                    console.log('📡 실시간 데이터베이스 채널 구독이 성공적으로 활성화되었습니다.');
-                } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
-                    console.error(`⚠️ 실시간 채널 연결 지연 또는 실패: ${status}`);
+                    console.log('📡 실시간 스트림 실시간 구독 시작');
                 }
             });
     }
 
-    // 기존 데이터 로드 (초기 새로고침용)
+    // 3. 진입 시 기존 데이터 조회
     async function fetchInitialData() {
         try {
             const { data, error } = await supabaseClient
                 .from('user_tracking')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(10);
+                .limit(20);
 
             if (error) throw error;
-            
-            if (data && data.length > 0) {
-                renderInitialList(data);
-            } else {
-                document.getElementById('user-depth-display').innerText = '현재 기록된 데이터가 없습니다.';
-            }
+            renderList(data);
         } catch (err) {
-            console.error('❌ 초기 데이터 조회 오류:', err.message);
+            console.error('❌ 데이터 로드 실패:', err.message);
         }
     }
 
-    // 실시간 이벤트를 받아 화면을 즉시 갱신하는 함수 (새로고침 불필요)
-    function handleRealtimeUpdate(payload) {
-        const logContainer = document.getElementById('log-container');
-        const eventType = payload.eventType;
-        const newData = payload.new;
-        
-        // 4. 실시간 로그 UI 생성 및 추가
-        const logItem = document.createElement('div');
-        logItem.className = 'log-entry';
-        logItem.innerText = `[${eventType}] 유저 ID: ${newData.user_id || 'N/A'} | 현재 깊이: ${newData.depth || 0}m (${new Date().toLocaleTimeString()})`;
-        
-        // 최신 로그가 맨 위에 쌓이도록 처리
-        logContainer.insertBefore(logItem, logContainer.firstChild);
-
-        // 데이터가 업데이트되거나 추가되었을 경우 대시보드 수치 즉시 반영
-        if (eventType === 'UPDATE' || eventType === 'INSERT') {
-            document.getElementById('user-depth-display').innerText = `현재 깊이: ${newData.depth || 0}m (유저: ${newData.user_id})`;
-        }
-    }
-
-    // 첫 진입 시 가져온 리스트를 뿌려주는 함수
-    function renderInitialList(items) {
+    // 4. 리스트 렌더링
+    function renderList(items) {
         const logContainer = document.getElementById('log-container');
         logContainer.innerHTML = ''; 
+
+        if (!items || items.length === 0) {
+            logContainer.innerHTML = '<div style="color:#777; padding: 10px;">표시할 데이터가 없습니다.</div>';
+            return;
+        }
         
         items.forEach(item => {
-            const logItem = document.createElement('div');
-            logItem.className = 'log-entry';
-            logItem.innerText = `[기존 기록] 유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
+            const logItem = createLogElement(item);
             logContainer.appendChild(logItem);
         });
         
-        // 가장 최신 데이터 대시보드에 표시
         if (items[0]) {
-            document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth || 0}m (유저: ${items[0].user_id})`;
+            updateDepthDisplay(items[0]);
         }
+    }
+
+    // 5. 📌 깜빡이는 핀 + 드래그 속성이 포함된 개별 엘리먼트 생성
+    function createLogElement(item) {
+        const logItem = document.createElement('div');
+        logItem.className = 'log-entry';
+        logItem.id = `pin-${item.id}`; 
+        logItem.draggable = true; // 🔥 HTML5 드래그 기능 활성화
+
+        // 드래그 시작 및 종료 이벤트 연결
+        logItem.addEventListener('dragstart', () => logItem.classList.add('dragging'));
+        logItem.addEventListener('dragend', () => logItem.classList.remove('dragging'));
+        
+        const contentWrap = document.createElement('div');
+        contentWrap.className = 'log-content';
+
+        const pinSpan = document.createElement('span');
+        pinSpan.className = 'blinking-pin';
+        pinSpan.innerText = '📌';
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'text-area';
+        textSpan.innerText = `유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
+        
+        contentWrap.appendChild(pinSpan);
+        contentWrap.appendChild(textSpan);
+        
+        // [확인창 생략] 클릭 즉시 지우는 삭제 버튼
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerText = '삭제';
+        deleteBtn.onclick = () => deletePinImmediately(item.id); 
+
+        logItem.appendChild(contentWrap);
+        logItem.appendChild(deleteBtn);
+        return logItem;
+    }
+
+    // 🔥 [추가] 컨테이너 내부에서 드래그 위치 계산 및 정렬 로직
+    function setupDragContainer() {
+        const logContainer = document.getElementById('log-container');
+        
+        logContainer.addEventListener('dragover', (e) => {
+            e.preventDefault(); // 드롭 허용을 위해 기본 기본 동작 차단
+            const draggingItem = logContainer.querySelector('.dragging');
+            if (!draggingItem) return;
+
+            // 현재 마우스 포인터 위치 아래에 있는 다른 요소들을 계산하여 정렬
+            const siblings = [...logContainer.querySelectorAll('.log-entry:not(.dragging)')];
+            const nextSibling = siblings.find(sibling => {
+                const box = sibling.getBoundingClientRect();
+                return e.clientY <= box.top + box.height / 2;
+            });
+
+            logContainer.insertBefore(draggingItem, nextSibling);
+        });
+    }
+
+    // 6. 무조건 즉시 삭제 실행 함수
+    async function deletePinImmediately(id) {
+        try {
+            const { error } = await supabaseClient
+                .from('user_tracking')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            console.log(`📌 핀 ID: ${id} 즉시 삭제 완료.`);
+        } catch (err) {
+            console.error('❌ 삭제 실패:', err.message);
+            alert('삭제에 실패했습니다: ' + err.message);
+        }
+    }
+
+    // 7. 실시간 DB 트래킹 핸들러
+    function handleRealtimeUpdate(payload) {
+        const logContainer = document.getElementById('log-container');
+        const eventType = payload.eventType;
+
+        if (eventType === 'INSERT') {
+            const newElement = createLogElement(payload.new);
+            logContainer.insertBefore(newElement, logContainer.firstChild);
+            updateDepthDisplay(payload.new);
+        } 
+        else if (eventType === 'UPDATE') {
+            const target = document.getElementById(`pin-${payload.new.id}`);
+            if (target) {
+                target.querySelector('.text-area').innerText = `유저 ID: ${payload.new.user_id} | 깊이: ${payload.new.depth}m (수정됨)`;
+            }
+            updateDepthDisplay(payload.new);
+        } 
+        else if (eventType === 'DELETE') {
+            const target = document.getElementById(`pin-${payload.old.id}`);
+            if (target) {
+                target.remove();
+            }
+        }
+    }
+
+    // 최상단 디스플레이 갱신
+    function updateDepthDisplay(item) {
+        document.getElementById('user-depth-display').innerText = `최근 깊이: ${item.depth || 0}m (유저: ${item.user_id})`;
     }
 });
 </script>
