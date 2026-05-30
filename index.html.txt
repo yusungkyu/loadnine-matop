@@ -131,9 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedPin = null;
 
     try {
-        // ✨ 대소문자 오류 수정 완료
-        if (typeof Supabase !== 'undefined') {
-            supabaseClient = Supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // ✨ 에러 수정 완료: Supabase CDN은 소문자 'supabase' 객체를 사용합니다.
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             console.log('✅ Supabase 클라이언트 초기화 성공');
             initApp();
         } else {
@@ -187,4 +187,178 @@ document.addEventListener('DOMContentLoaded', () => {
         layer.innerHTML = '';
         list.innerHTML = '';
         
-        const filtered = pins.filter(p =>
+        const filtered = pins.filter(p => p.board_id === currentBoard);
+        if (filtered.length === 0) {
+            list.innerHTML = '<div style="color: #6b7280; font-size: 13px; padding: 6px 0;">등록된 실시간 위치가 없습니다.</div>';
+        }
+
+        filtered.forEach((p, i) => {
+            const displayStr = p.name || `이름 : 무명 / 무기 : 입력 안함`;
+            const splitName = displayStr.split(' / ');
+            const n = splitName[0].replace('이름 : ', '').trim();
+            const w = (splitName[1] || '').replace('무기 : ', '').trim();
+
+            const btn = document.createElement('button');
+            btn.className = 'pin';
+            const leftPos = rect.width > 0 ? (p.x_ratio * rect.width) : (p.x_ratio * 100) + '%';
+            const topPos = rect.height > 0 ? (p.y_ratio * rect.height) : (p.y_ratio * 100) + '%';
+            btn.style.left = typeof leftPos === 'number' ? leftPos + 'px' : leftPos;
+            btn.style.top = typeof topPos === 'number' ? topPos + 'px' : topPos;
+            
+            const handleDragStart = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                let isDragging = false;
+                const isTouch = e.type === 'touchstart';
+                const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+                const upEvent = isTouch ? 'touchend' : 'mouseup';
+
+                const onMove = (moveEv) => {
+                    isDragging = true;
+                    const clientX = isTouch ? moveEv.touches[0].clientX : moveEv.clientX;
+                    const clientY = isTouch ? moveEv.touches[0].clientY : moveEv.clientY;
+                    let newX = clientX - img.getBoundingClientRect().left;
+                    let newY = clientY - img.getBoundingClientRect().top;
+                    btn.style.left = Math.max(0, Math.min(newX, img.getBoundingClientRect().width)) + 'px';
+                    btn.style.top = Math.max(0, Math.min(newY, img.getBoundingClientRect().height)) + 'px';
+                };
+
+                const onUp = async (upEv) => {
+                    document.removeEventListener(moveEvent, onMove);
+                    document.removeEventListener(upEvent, onUp);
+                    
+                    if (isDragging) {
+                        const clientX = isTouch ? upEv.changedTouches[0].clientX : upEv.clientX;
+                        const clientY = isTouch ? upEv.changedTouches[0].clientY : upEv.clientY;
+                        let finalXRatio = (clientX - img.getBoundingClientRect().left) / img.getBoundingClientRect().width;
+                        let finalYRatio = (clientY - img.getBoundingClientRect().top) / img.getBoundingClientRect().height;
+                        
+                        await supabaseClient.from(PINS_TBL).update({
+                            x_ratio: Math.max(0, Math.min(finalXRatio, 1)),
+                            y_ratio: Math.max(0, Math.min(finalYRatio, 1))
+                        }).eq('id', p.id);
+                    } else {
+                        selectedPin = p; 
+                        document.getElementById('viewName').textContent = n;
+                        document.getElementById('viewWeapon').textContent = w;
+                        document.getElementById('viewModalBackdrop').style.display = 'flex';
+                    }
+                };
+                document.addEventListener(moveEvent, onMove, { passive: false });
+                document.addEventListener(upEvent, onUp);
+            };
+
+            btn.onmousedown = handleDragStart;
+            btn.ontouchstart = handleDragStart;
+            layer.appendChild(btn);
+            list.innerHTML += `<div class="pin-item"><span>${i+1}. ${displayStr}</span><button class="btn-delete-direct" onclick="deletePin(${p.id})">삭제</button></div>`;
+        });
+    }
+
+    window.deletePin = async (id) => {
+        if (!confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData(false);
+    };
+
+    async function fetchInitialData() {
+        try {
+            const { data, error } = await supabaseClient.from('user_tracking').select('*').order('created_at', { ascending: false }).limit(10);
+            if (error) throw error;
+            if (data && data.length > 0) { renderInitialList(data); } 
+            else { document.getElementById('user-depth-display').innerText = '현재 기록된 데이터가 없습니다.'; }
+        } catch (err) {
+            console.error('❌ 초기 데이터 조회 오류:', err.message);
+        }
+    }
+
+    function handleRealtimeUpdate(payload) {
+        const logContainer = document.getElementById('log-container');
+        const eventType = payload.eventType;
+        const newData = payload.new || payload.old || {}; // 데이터 안전장치 보완
+        
+        const logItem = document.createElement('div');
+        logItem.className = 'log-entry';
+        logItem.innerText = `[${eventType}] 유저 ID: ${newData.user_id || 'N/A'} | 현재 깊이: ${newData.depth || 0}m (${new Date().toLocaleTimeString()})`;
+        logContainer.insertBefore(logItem, logContainer.firstChild);
+
+        if (eventType === 'UPDATE' || eventType === 'INSERT') {
+            document.getElementById('user-depth-display').innerText = `현재 깊이: ${newData.depth || 0}m (유저: ${newData.user_id})`;
+        }
+    }
+
+    function renderInitialList(items) {
+        const logContainer = document.getElementById('log-container');
+        logContainer.innerHTML = ''; 
+        items.forEach(item => {
+            const logItem = document.createElement('div');
+            logItem.className = 'log-entry';
+            logItem.innerText = `[기존 기록] 유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
+            logContainer.appendChild(logItem);
+        });
+        if (items[0]) { document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth || 0}m (유저: ${items[0].user_id})`; }
+    }
+
+    // 모달 제어 이벤트
+    document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
+    document.getElementById('introConfirmBtn').onclick = () => document.getElementById('introModalBackdrop').style.display = 'none';
+    document.getElementById('cancelCreateBtn').onclick = () => document.getElementById('createModalBackdrop').style.display = 'none';
+    document.getElementById('closeViewBtn').onclick = () => document.getElementById('viewModalBackdrop').style.display = 'none';
+    document.getElementById('profileCancelBtn').onclick = () => document.getElementById('profileModalBackdrop').style.display = 'none';
+
+    document.getElementById('profileEditBtn').onclick = () => { 
+        document.getElementById('dressCodeInput').value = document.getElementById('dressCodeText').textContent; 
+        document.getElementById('profileModalBackdrop').style.display = 'flex'; 
+    };
+    
+    document.getElementById('profileSaveBtn').onclick = async () => {
+        await supabaseClient.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
+        loadMapData(false);
+        document.getElementById('profileModalBackdrop').style.display = 'none';
+    };
+
+    const registerPoint = (clientX, clientY, target) => {
+        const rect = target.getBoundingClientRect();
+        pendingPoint = { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+        document.getElementById('pinName').value = '';
+        document.getElementById('pinWeapon').selectedIndex = 0;
+        document.getElementById('createModalBackdrop').style.display = 'flex';
+    };
+
+    document.getElementById('imageWrap').onmousedown = (e) => { if (e.target.id === 'bgImage') registerPoint(e.clientX, e.clientY, e.target); };
+    document.getElementById('imageWrap').ontouchstart = (e) => { if (e.target.id === 'bgImage') registerPoint(e.touches[0].clientX, e.touches[0].clientY, e.target); };
+
+    document.getElementById('saveBtn').onclick = async () => {
+        if (!pendingPoint) return;
+        await supabaseClient.from(PINS_TBL).insert({ 
+            board_id: currentBoard, x_ratio: pendingPoint.x, y_ratio: pendingPoint.y, 
+            name: `이름 : ${document.getElementById('pinName').value.trim() || '무명'} / 무기 : ${document.getElementById('pinWeapon').value}` 
+        });
+        document.getElementById('createModalBackdrop').style.display = 'none';
+        loadMapData(false);
+    };
+
+    document.getElementById('deleteBtn').onclick = async () => {
+        if (!selectedPin || !confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        await supabaseClient.from(PINS_TBL).delete().eq('id', selectedPin.id);
+        document.getElementById('viewModalBackdrop').style.display = 'none';
+        loadMapData(false);
+    };
+
+    // 🔄 탭 전환 시 이미지 주소 처리 (유저의 1, 2층 진짜 주소로 세팅 완료)
+    document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        e.target.classList.add('active');
+        currentBoard = e.target.dataset.id;
+        
+        // 1층, 2층 진짜 이미지 주소 적용 완료
+        document.getElementById('bgImage').src = currentBoard === 'floor1' ? 'https://i.ibb.co/0RST75vn/1.png' : 'https://i.ibb.co/MD9V69Vm/2.png';
+        document.getElementById('bgImage').onload = renderMap;
+        renderMap(); 
+    });
+
+    document.getElementById('refreshBtn').onclick = () => { loadMapData(false); fetchInitialData(); };
+    window.addEventListener('resize', renderMap);
+});
+</script>
+</body>
+</html>
