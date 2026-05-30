@@ -15,18 +15,19 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 .tab-btn.active { background: #2563eb; color: #fff; }
 .refresh-btn { border: none; border-radius: 8px; padding: 9px 14px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
 .board-wrap { background: #fff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; }
-.image-wrap { position: relative; width: 100%; background: #fff; line-height: 0; cursor: crosshair; }
-.image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+.image-wrap { position: relative; width: 100%; background: #fff; line-height: 0; cursor: crosshair; touch-action: none; }
+.image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .pin-layer { position: absolute; inset: 0; pointer-events: none; }
 
-/* ⚡ 핀 깜빡임 애니메이션 적용 */
+/* ⚡ 핀 디자인 및 애니메이션 */
 .pin { 
     position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
     border: 2px solid #fff; border-radius: 50%; background: #dc2626; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.28); cursor: pointer; z-index: 2;
-    pointer-events: auto;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.28); cursor: grab; z-index: 2;
+    pointer-events: auto; touch-action: none;
     animation: blink-effect 1.5s infinite; 
 }
+.pin:active { cursor: grabbing; animation: none; opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
 @keyframes blink-effect {
     0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.1); }
@@ -40,7 +41,6 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 .pin-item:last-child { border-bottom: none; }
 .pin-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 
-/* ⚡ 바로 삭제 버튼 스타일 */
 .btn-delete-direct { border: none; border-radius: 6px; background: #dc2626; color: #fff; padding: 6px 12px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 
 .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; padding: 16px; }
@@ -92,9 +92,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 <div class="modal-backdrop" id="introModalBackdrop">
     <div class="modal">
         <h3>🏰 오늘의 드레스코드</h3>
-        <div id="introDressCodeText" style="padding:15px; background:#eff6ff; border:1px solid #bfdbfe; font-weight:bold; color:#1e40af; text-align:center; font-size:18px; margin:10px 0;">
-            불러오는 중...
-        </div>
+        <div id="introDressCodeText" style="padding:15px; background:#eff6ff; border:1px solid #bfdbfe; font-weight:bold; color:#1e40af; text-align:center; font-size:18px; margin:10px 0;"></div>
         <div class="modal-buttons"><button class="btn btn-blue" id="introConfirmBtn" style="width:100%;">확인</button></div>
     </div>
 </div>
@@ -102,10 +100,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 <div class="modal-backdrop" id="createModalBackdrop">
     <div class="modal">
         <h3>핀 등록</h3>
-        <div class="form-row">
-            <label>이름 :</label>
-            <input type="text" id="pinName" placeholder="이름 입력">
-        </div>
+        <div class="form-row"><label>이름 :</label><input type="text" id="pinName" placeholder="이름 입력"></div>
         <div class="form-row">
             <label>무기 :</label>
             <select id="pinWeapon">
@@ -132,14 +127,8 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 <div class="modal-backdrop" id="viewModalBackdrop">
     <div class="modal">
         <h3>핀 정보</h3>
-        <div class="form-row">
-            <label>이름 :</label>
-            <div class="view-value" id="viewName"></div>
-        </div>
-        <div class="form-row">
-            <label>무기 :</label>
-            <div class="view-value" id="viewWeapon"></div>
-        </div>
+        <div class="form-row"><label>이름 :</label><div class="view-value" id="viewName"></div></div>
+        <div class="form-row"><label>무기 :</label><div class="view-value" id="viewWeapon"></div></div>
         <div class="modal-buttons">
             <button class="btn btn-red" id="deleteBtn">삭제</button>
             <button class="btn btn-gray" id="closeViewBtn">닫기</button>
@@ -150,10 +139,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #1
 <div class="modal-backdrop" id="profileModalBackdrop">
     <div class="modal">
         <h3>드레스코드 수정</h3>
-        <div class="form-row">
-            <label>코드 :</label>
-            <input type="text" id="dressCodeInput" placeholder="입력하세요">
-        </div>
+        <div class="form-row"><label>코드 :</label><input type="text" id="dressCodeInput" placeholder="입력하세요"></div>
         <div class="modal-buttons">
             <button class="btn btn-gray" id="profileCancelBtn">취소</button>
             <button class="btn btn-blue" id="profileSaveBtn">저장</button>
@@ -183,8 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.supabase) {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         loadData(true);
-        
-        // 실시간 연동 (데이터 변경 시 자동 새로고침)
         supabase.channel('realtime').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadData(false)).subscribe();
         supabase.channel('realtime_profile').on('postgres_changes', { event: '*', schema: 'public', table: PROFILE_TBL }, () => loadData(false)).subscribe();
     }
@@ -195,14 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         pins = p || [];
         const currentDressCode = pr?.dress_code || '미설정';
-        
         document.getElementById('dressCodeText').textContent = currentDressCode;
         
         if (showIntro) {
             document.getElementById('introDressCodeText').textContent = currentDressCode;
             document.getElementById('introModalBackdrop').style.display = 'flex';
         }
-        
         render();
     }
 
@@ -213,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const rect = img.getBoundingClientRect();
         
         document.getElementById('listTitle').textContent = currentBoard === 'floor1' ? '1층 핀 목록' : '2층 핀 목록';
-        
         layer.innerHTML = '';
         list.innerHTML = '';
         
@@ -225,53 +206,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
         filtered.forEach((p, i) => {
             const rawName = p.name || '';
-            const displayStr = rawName.includes('이름 :') && rawName.includes(' / 무기 :') 
-                ? rawName 
-                : `이름 : ${rawName} / 무기 : 입력 안함`;
-                
+            const displayStr = rawName.includes('이름 :') && rawName.includes(' / 무기 :') ? rawName : `이름 : ${rawName} / 무기 : 입력 안함`;
             const splitName = displayStr.split(' / ');
             const n = splitName[0].replace('이름 : ', '').trim();
             const w = (splitName[1] || '').replace('무기 : ', '').trim();
 
-            // 1. 핀 그리기
             const btn = document.createElement('button');
             btn.className = 'pin';
             btn.style.left = (p.x_ratio * rect.width) + 'px';
             btn.style.top = (p.y_ratio * rect.height) + 'px';
-            btn.onclick = (e) => { 
-                e.stopPropagation();
-                selectedPin = p; 
-                document.getElementById('viewName').textContent = n;
-                document.getElementById('viewWeapon').textContent = w;
-                document.getElementById('viewModalBackdrop').style.display = 'flex';
-            };
-            layer.appendChild(btn);
             
-            // 2. 핀 목록 & 바로 삭제 버튼 그리기
-            list.innerHTML += `
-                <div class="pin-item">
-                    <span>${i+1}. ${displayStr}</span>
-                    <button class="btn-delete-direct" onclick="deletePin(${p.id})">삭제</button>
-                </div>
-            `;
+            // 드래그 앤 드롭 기능
+            const handleDragStart = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                let isDragging = false;
+                const isTouch = e.type === 'touchstart';
+                const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+                const upEvent = isTouch ? 'touchend' : 'mouseup';
+
+                const onMove = (moveEv) => {
+                    isDragging = true;
+                    const clientX = isTouch ? moveEv.touches[0].clientX : moveEv.clientX;
+                    const clientY = isTouch ? moveEv.touches[0].clientY : moveEv.clientY;
+                    
+                    let newX = clientX - img.getBoundingClientRect().left;
+                    let newY = clientY - img.getBoundingClientRect().top;
+                    
+                    btn.style.left = Math.max(0, Math.min(newX, img.getBoundingClientRect().width)) + 'px';
+                    btn.style.top = Math.max(0, Math.min(newY, img.getBoundingClientRect().height)) + 'px';
+                };
+
+                const onUp = async (upEv) => {
+                    document.removeEventListener(moveEvent, onMove);
+                    document.removeEventListener(upEvent, onUp);
+                    
+                    if (isDragging) {
+                        const clientX = isTouch ? upEv.changedTouches[0].clientX : upEv.clientX;
+                        const clientY = isTouch ? upEv.changedTouches[0].clientY : upEv.clientY;
+                        
+                        let finalXRatio = (clientX - img.getBoundingClientRect().left) / img.getBoundingClientRect().width;
+                        let finalYRatio = (clientY - img.getBoundingClientRect().top) / img.getBoundingClientRect().height;
+                        
+                        await supabase.from(PINS_TBL).update({
+                            x_ratio: Math.max(0, Math.min(finalXRatio, 1)),
+                            y_ratio: Math.max(0, Math.min(finalYRatio, 1))
+                        }).eq('id', p.id);
+                    } else {
+                        selectedPin = p; 
+                        document.getElementById('viewName').textContent = n;
+                        document.getElementById('viewWeapon').textContent = w;
+                        document.getElementById('viewModalBackdrop').style.display = 'flex';
+                    }
+                };
+
+                document.addEventListener(moveEvent, onMove, { passive: false });
+                document.addEventListener(upEvent, onUp);
+            };
+
+            btn.onmousedown = handleDragStart;
+            btn.ontouchstart = handleDragStart;
+
+            layer.appendChild(btn);
+            list.innerHTML += `<div class="pin-item"><span>${i+1}. ${displayStr}</span><button class="btn-delete-direct" onclick="deletePin(${p.id})">삭제</button></div>`;
         });
     }
 
-    // 전역 함수 (리스트에서 바로 삭제)
     window.deletePin = async (id) => {
         if (!confirm('이 핀을 삭제하시겠습니까?')) return;
         await supabase.from(PINS_TBL).delete().eq('id', id);
         loadData(false);
     };
 
-    // 모달 배경 클릭 시 닫기
-    document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { 
-        if (e.target === m) m.style.display = 'none'; 
-    });
-
-    // 버튼 이벤트 연결
+    document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
     document.getElementById('introConfirmBtn').onclick = () => document.getElementById('introModalBackdrop').style.display = 'none';
-    
     document.getElementById('cancelCreateBtn').onclick = () => document.getElementById('createModalBackdrop').style.display = 'none';
     document.getElementById('closeViewBtn').onclick = () => document.getElementById('viewModalBackdrop').style.display = 'none';
     document.getElementById('profileCancelBtn').onclick = () => document.getElementById('profileModalBackdrop').style.display = 'none';
@@ -282,42 +290,40 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     document.getElementById('profileSaveBtn').onclick = async () => {
-        const val = document.getElementById('dressCodeInput').value;
-        await supabase.from(PROFILE_TBL).upsert({ id: 1, dress_code: val });
+        await supabase.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
         loadData(false);
         document.getElementById('profileModalBackdrop').style.display = 'none';
     };
 
-    // 이미지 클릭 시 핀 등록
-    document.getElementById('imageWrap').onclick = (e) => {
+    document.getElementById('imageWrap').onmousedown = (e) => {
         if (e.target.id !== 'bgImage') return;
         const rect = e.target.getBoundingClientRect();
-        pendingPoint = { 
-            x: (e.clientX - rect.left) / rect.width, 
-            y: (e.clientY - rect.top) / rect.height 
-        };
+        pendingPoint = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+        document.getElementById('pinName').value = '';
+        document.getElementById('pinWeapon').selectedIndex = 0;
+        document.getElementById('createModalBackdrop').style.display = 'flex';
+    };
+    // 모바일 터치로 핀 추가
+    document.getElementById('imageWrap').ontouchstart = (e) => {
+        if (e.target.id !== 'bgImage') return;
+        const rect = e.target.getBoundingClientRect();
+        const touch = e.touches[0];
+        pendingPoint = { x: (touch.clientX - rect.left) / rect.width, y: (touch.clientY - rect.top) / rect.height };
         document.getElementById('pinName').value = '';
         document.getElementById('pinWeapon').selectedIndex = 0;
         document.getElementById('createModalBackdrop').style.display = 'flex';
     };
 
-    // 핀 저장
     document.getElementById('saveBtn').onclick = async () => {
         if (!pendingPoint) return;
-        const nameVal = document.getElementById('pinName').value.trim() || '무명';
-        const weaponVal = document.getElementById('pinWeapon').value;
-        
         await supabase.from(PINS_TBL).insert({ 
-            board_id: currentBoard, 
-            x_ratio: pendingPoint.x, 
-            y_ratio: pendingPoint.y, 
-            name: `이름 : ${nameVal} / 무기 : ${weaponVal}` 
+            board_id: currentBoard, x_ratio: pendingPoint.x, y_ratio: pendingPoint.y, 
+            name: `이름 : ${document.getElementById('pinName').value.trim() || '무명'} / 무기 : ${document.getElementById('pinWeapon').value}` 
         });
         document.getElementById('createModalBackdrop').style.display = 'none';
         loadData(false);
     };
 
-    // 상세 보기 팝업에서 삭제
     document.getElementById('deleteBtn').onclick = async () => {
         if (!selectedPin || !confirm('이 핀을 삭제하시겠습니까?')) return;
         await supabase.from(PINS_TBL).delete().eq('id', selectedPin.id);
@@ -325,19 +331,15 @@ document.addEventListener('DOMContentLoaded', () => {
         loadData(false);
     };
 
-    // 탭 전환
     document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         e.target.classList.add('active');
         currentBoard = e.target.dataset.id;
         document.getElementById('bgImage').src = currentBoard === 'floor1' ? 'https://i.ibb.co/0RST75vn/1.png' : 'https://i.ibb.co/MD9V69Vm/2.png';
-        
-        // 이미지 로드 후 렌더링을 위해 이벤트 리스너 추가
         document.getElementById('bgImage').onload = render;
-        render(); // 캐시된 이미지를 위해 즉시 호출도 병행
+        render(); 
     });
 
-    // 새로고침 버튼
     document.getElementById('refreshBtn').onclick = () => loadData(false);
 });
 </script>
