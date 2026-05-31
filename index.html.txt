@@ -3,19 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>마력의 탑 - 실시간 위치 및 로그 추적</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>마력의 탑 - 실시간 위치 공유</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; margin: 0; }
         .container { max-width: 800px; margin: 0 auto; }
         h2, h3 { margin-top: 0; color: #fff; }
         
         .panel { border: 1px solid #333; padding: 15px; margin-bottom: 15px; background: #222; border-radius: 6px; }
-        .log-entry { font-family: monospace; font-size: 0.9rem; color: #a3be8c; border-bottom: 1px solid #333; padding: 6px 0; }
-        .log-entry:last-child { border-bottom: none; }
-        .error-msg { color: #bf616a; font-weight: bold; }
 
-        .profile-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #2b2b2b; border: 1px solid #333; border-radius: 6px; margin-bottom: 15px; }
         .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
         .tabs { display: flex; gap: 6px; }
         
@@ -33,13 +29,13 @@
         .image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
         .pin-layer { position: absolute; inset: 0; pointer-events: none; }
 
-        /* 실시간 핀 디자인 및 애니메이션 */
+        /* 실시간 핀 디자인 및 애니메이션 (깜빡임 속도 0.5초) */
         .pin { 
             position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); 
             border: 2px solid #fff; border-radius: 50%; background: #dc2626; 
             box-shadow: 0 2px 6px rgba(0,0,0,0.5); cursor: grab; z-index: 2;
             pointer-events: auto; touch-action: none;
-            animation: blink-effect 1.5s infinite; 
+            animation: blink-effect 0.5s infinite; 
         }
         .pin:active { cursor: grabbing; animation: none; opacity: 0.9; transform: translate(-50%, -50%) scale(1.2); }
         @keyframes blink-effect {
@@ -48,7 +44,7 @@
             100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
 
-        .pin-list { display: flex; flex-direction: column; max-height: 200px; overflow-y: auto; }
+        .pin-list { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
         .pin-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; gap: 10px; font-size: 13px; }
         .pin-item:last-child { border-bottom: none; }
         .pin-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -66,13 +62,8 @@
 <body>
 
 <div class="container">
-    <h2 id="mainTitle">🏰 마력의 탑 모니터링 대시보드</h2>
+    <h2 id="mainTitle" style="margin-bottom: 20px;">🏰 마력의 탑 실시간 맵</h2>
     
-    <div class="profile-bar">
-        <div style="font-size: 15px; font-weight: bold;">드레스코드 : <span id="dressCodeText" style="color:#81a1c1;">-</span></div>
-        <button type="button" class="btn btn-blue" id="profileEditBtn" style="padding: 5px 10px;">수정</button>
-    </div>
-
     <div class="board-controls">
         <div class="tabs" id="tabs">
             <button class="tab-btn active" data-id="floor1">1층</button>
@@ -94,32 +85,18 @@
         <h3 id="listTitle">📍 1층 실시간 위치 목록</h3>
         <div class="pin-list" id="pinList"></div>
     </div>
-    
-    <div class="panel">
-        <h3>📍 실시간 유저 깊이(Depth) 현황</h3>
-        <div id="user-depth-display">데이터를 불러오는 중...</div>
-    </div>
-
-    <div class="panel">
-        <h3>📜 실시간 트랜잭션 로그</h3>
-        <div id="log-container">로그가 이곳에 표시됩니다.</div>
-    </div>
 </div>
 
-<div class="modal-backdrop" id="introModalBackdrop"><div class="modal"><h3>🏰 오늘의 드레스코드</h3><div id="introDressCodeText" style="padding:15px; background:#2b2b2b; border:1px solid #444; font-weight:bold; color:#81a1c1; text-align:center; font-size:18px; margin:10px 0; border-radius:4px;"></div><div class="modal-buttons"><button class="btn btn-blue" id="introConfirmBtn" style="width:100%;">확인</button></div></div></div>
 <div class="modal-backdrop" id="createModalBackdrop"><div class="modal"><h3>핀 등록</h3><div class="form-row"><label>이름 :</label><input type="text" id="pinName" placeholder="이름 입력"></div><div class="form-row"><label>무기 :</label><select id="pinWeapon"><option value="입력 안함">입력 안함</option><option value="검과방패">검과방패</option><option value="전투봉">전투봉</option><option value="활">활</option><option value="석궁">석궁</option><option value="지팡이">지팡이</option><option value="사이드">사이드</option><option value="전투방패">전투방패</option><option value="단검">단검</option><option value="대검">대검</option><option value="맨손">맨손</option></select></div><div class="modal-buttons"><button class="btn btn-gray" id="cancelCreateBtn">취소</button><button class="btn btn-blue" id="saveBtn">저장</button></div></div></div>
 <div class="modal-backdrop" id="viewModalBackdrop"><div class="modal"><h3>핀 정보</h3><div class="form-row"><label>이름 :</label><div class="view-value" id="viewName"></div></div><div class="form-row"><label>무기 :</label><div class="view-value" id="viewWeapon"></div></div><div class="modal-buttons"><button class="btn btn-red" id="deleteBtn">삭제</button><button class="btn btn-gray" id="closeViewBtn">닫기</button></div></div></div>
-<div class="modal-backdrop" id="profileModalBackdrop"><div class="modal"><h3>드레스코드 수정</h3><div class="form-row"><label>코드 :</label><input type="text" id="dressCodeInput" placeholder="코드를 입력하세요"></div><div class="modal-buttons"><button class="btn btn-gray" id="profileCancelBtn">취소</button><button class="btn btn-blue" id="profileSaveBtn">저장</button></div></div></div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('load', () => {
     // 🔗 Supabase 연결 설정
     const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
     
-    // 🌟 GitHub Pages 환경 유연성 확보를 위해 마력의 탑 테이블명 명시적 고정
     const PINS_TBL = 'pins_matop';
-    const PROFILE_TBL = 'matop_profile';
 
     let supabaseClient;
     let currentBoard = 'floor1';
@@ -128,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedPin = null;
 
     try {
-        // ✨ CDN 표준 객체 검증 (소문자 supabase가 일관되게 맞습니다)
         if (typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             console.log('✅ Supabase 클라이언트 연결 완료');
@@ -138,36 +114,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } catch (error) {
         console.error('❌ 초기화 오류:', error.message);
-        document.getElementById('user-depth-display').innerHTML = `<span class="error-msg">연결 실패: ${error.message}</span>`;
+        alert('데이터베이스 연결 실패: ' + error.message);
         return;
     }
 
     function initApp() {
-        loadMapData(true);
-        fetchInitialData();
-        
-        supabaseClient.channel('map-changes').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadMapData(false)).subscribe();
-        supabaseClient.channel('profile-changes').on('postgres_changes', { event: '*', schema: 'public', table: PROFILE_TBL }, () => loadMapData(false)).subscribe();
-        
-        supabaseClient.channel('witch-tower-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'user_tracking' }, (payload) => {
-                handleRealtimeUpdate(payload);
-            }).subscribe();
+        loadMapData();
+        // 실시간 변경 감지 (핀 위치, 등록, 삭제)
+        supabaseClient.channel('map-changes').on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadMapData()).subscribe();
     }
 
-    async function loadMapData(showIntro = false) {
+    async function loadMapData() {
         try {
             const { data: p } = await supabaseClient.from(PINS_TBL).select('*').order('created_at', { ascending: true });
-            const { data: pr } = await supabaseClient.from(PROFILE_TBL).select('dress_code').eq('id', 1).maybeSingle();
-            
             pins = p || [];
-            const currentDressCode = pr?.dress_code || '미설정';
-            document.getElementById('dressCodeText').textContent = currentDressCode;
-            
-            if (showIntro) {
-                document.getElementById('introDressCodeText').textContent = currentDressCode;
-                document.getElementById('introModalBackdrop').style.display = 'flex';
-            }
             renderMap();
         } catch (e) {
             console.error("데이터 동기화 실패:", e);
@@ -209,6 +169,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const moveEvent = isTouch ? 'touchmove' : 'mousemove';
                 const upEvent = isTouch ? 'touchend' : 'mouseup';
 
+                const startXRatio = p.x_ratio;
+                const startYRatio = p.y_ratio;
+
                 const onMove = (moveEv) => {
                     isDragging = true;
                     const clientX = isTouch ? moveEv.touches[0].clientX : moveEv.clientX;
@@ -229,11 +192,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         let finalXRatio = (clientX - img.getBoundingClientRect().left) / img.getBoundingClientRect().width;
                         let finalYRatio = (clientY - img.getBoundingClientRect().top) / img.getBoundingClientRect().height;
                         
-                        await supabaseClient.from(PINS_TBL).update({
-                            x_ratio: Math.max(0, Math.min(finalXRatio, 1)),
-                            y_ratio: Math.max(0, Math.min(finalYRatio, 1))
-                        }).eq('id', p.id);
+                        finalXRatio = Math.max(0, Math.min(finalXRatio, 1));
+                        finalYRatio = Math.max(0, Math.min(finalYRatio, 1));
+
+                        // 위치가 실제로 1% 이상 변했을 때만 DB 업데이트 (부하 방지)
+                        if (Math.abs(startXRatio - finalXRatio) > 0.01 || Math.abs(startYRatio - finalYRatio) > 0.01) {
+                            await supabaseClient.from(PINS_TBL).update({
+                                x_ratio: finalXRatio,
+                                y_ratio: finalYRatio
+                            }).eq('id', p.id);
+                        } else {
+                            // 이동이 거의 없었으면 단순 클릭으로 간주
+                            selectedPin = p; 
+                            document.getElementById('viewName').textContent = n;
+                            document.getElementById('viewWeapon').textContent = w;
+                            document.getElementById('viewModalBackdrop').style.display = 'flex';
+                        }
                     } else {
+                        // 드래그가 아예 발생하지 않은 단순 클릭
                         selectedPin = p; 
                         document.getElementById('viewName').textContent = n;
                         document.getElementById('viewWeapon').textContent = w;
@@ -247,71 +223,22 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.onmousedown = handleDragStart;
             btn.ontouchstart = handleDragStart;
             layer.appendChild(btn);
+            
+            // 삭제 버튼 클릭 시 즉시 삭제 (확인창 없음)
             list.innerHTML += `<div class="pin-item"><span>${i+1}. ${displayStr}</span><button class="btn-delete-direct" onclick="deletePin(${p.id})">삭제</button></div>`;
         });
     }
 
+    // 목록에 있는 삭제 버튼
     window.deletePin = async (id) => {
-        if (!confirm('이 위치 핀을 삭제하시겠습니까?')) return;
         await supabaseClient.from(PINS_TBL).delete().eq('id', id);
-        loadMapData(false);
+        loadMapData();
     };
 
-    async function fetchInitialData() {
-        try {
-            const { data, error } = await supabaseClient.from('user_tracking').select('*').order('created_at', { ascending: false }).limit(10);
-            if (error) throw error;
-            if (data && data.length > 0) { renderInitialList(data); } 
-            else { document.getElementById('user-depth-display').innerText = '현재 기록된 데이터가 없습니다.'; }
-        } catch (err) {
-            console.error('❌ 깊이 데이터 수신 오류:', err.message);
-        }
-    }
-
-    function handleRealtimeUpdate(payload) {
-        const logContainer = document.getElementById('log-container');
-        const eventType = payload.eventType;
-        const newData = payload.new || payload.old || {};
-        
-        const logItem = document.createElement('div');
-        logItem.className = 'log-entry';
-        logItem.innerText = `[${eventType}] 유저 ID: ${newData.user_id || 'N/A'} | 현재 깊이: ${newData.depth || 0}m (${new Date().toLocaleTimeString()})`;
-        logContainer.insertBefore(logItem, logContainer.firstChild);
-
-        if (eventType === 'UPDATE' || eventType === 'INSERT') {
-            document.getElementById('user-depth-display').innerText = `현재 깊이: ${newData.depth || 0}m (유저: ${newData.user_id})`;
-        }
-    }
-
-    function renderInitialList(items) {
-        const logContainer = document.getElementById('log-container');
-        logContainer.innerHTML = ''; 
-        items.forEach(item => {
-            const logItem = document.createElement('div');
-            logItem.className = 'log-entry';
-            logItem.innerText = `[기존 기록] 유저 ID: ${item.user_id} | 깊이: ${item.depth}m`;
-            logContainer.appendChild(logItem);
-        });
-        if (items[0]) { document.getElementById('user-depth-display').innerText = `최근 깊이: ${items[0].depth || 0}m (유저: ${items[0].user_id})`; }
-    }
-
-    // 모달 제어 이벤트
+    // 모달창 닫기 이벤트
     document.querySelectorAll('.modal-backdrop').forEach(m => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
-    document.getElementById('introConfirmBtn').onclick = () => document.getElementById('introModalBackdrop').style.display = 'none';
     document.getElementById('cancelCreateBtn').onclick = () => document.getElementById('createModalBackdrop').style.display = 'none';
     document.getElementById('closeViewBtn').onclick = () => document.getElementById('viewModalBackdrop').style.display = 'none';
-    document.getElementById('profileCancelBtn').onclick = () => document.getElementById('profileModalBackdrop').style.display = 'none';
-
-    document.getElementById('profileEditBtn').onclick = () => { 
-        document.getElementById('dressCodeInput').value = document.getElementById('dressCodeText').textContent; 
-        document.getElementById('profileModalBackdrop').style.display = 'flex'; 
-    };
-    
-    document.getElementById('profileSaveBtn').onclick = async () => {
-        await supabaseClient.from(PROFILE_TBL).upsert({ id: 1, dress_code: document.getElementById('dressCodeInput').value });
-        loadMapData(false);
-        document.getElementById('profileModalBackdrop').style.display = 'none';
-    };
 
     const registerPoint = (clientX, clientY, target) => {
         const rect = target.getBoundingClientRect();
@@ -321,9 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('createModalBackdrop').style.display = 'flex';
     };
 
+    // 맵 이미지 클릭 시 핀 등록 창 띄우기
     document.getElementById('imageWrap').onmousedown = (e) => { if (e.target.id === 'bgImage') registerPoint(e.clientX, e.clientY, e.target); };
     document.getElementById('imageWrap').ontouchstart = (e) => { if (e.target.id === 'bgImage') registerPoint(e.touches[0].clientX, e.touches[0].clientY, e.target); };
 
+    // 핀 생성 버튼
     document.getElementById('saveBtn').onclick = async () => {
         if (!pendingPoint) return;
         await supabaseClient.from(PINS_TBL).insert({ 
@@ -331,29 +260,29 @@ document.addEventListener('DOMContentLoaded', () => {
             name: `이름 : ${document.getElementById('pinName').value.trim() || '무명'} / 무기 : ${document.getElementById('pinWeapon').value}` 
         });
         document.getElementById('createModalBackdrop').style.display = 'none';
-        loadMapData(false);
+        loadMapData();
     };
 
+    // 핀 정보 모달창 내 삭제 버튼 (확인창 없음)
     document.getElementById('deleteBtn').onclick = async () => {
-        if (!selectedPin || !confirm('이 위치 핀을 삭제하시겠습니까?')) return;
+        if (!selectedPin) return; 
         await supabaseClient.from(PINS_TBL).delete().eq('id', selectedPin.id);
         document.getElementById('viewModalBackdrop').style.display = 'none';
-        loadMapData(false);
+        loadMapData();
     };
 
-    // 🔄 탭 전환 시 직접 이미지 매핑 구조 완전 고정
+    // 🔄 탭 전환 처리
     document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         e.target.classList.add('active');
         currentBoard = e.target.dataset.id;
         
-        // 유저 고유 1, 2층 이미지 동기화
         document.getElementById('bgImage').src = currentBoard === 'floor1' ? 'https://i.ibb.co/0RST75vn/1.png' : 'https://i.ibb.co/MD9V69Vm/2.png';
         document.getElementById('bgImage').onload = renderMap;
         renderMap(); 
     });
 
-    document.getElementById('refreshBtn').onclick = () => { loadMapData(false); fetchInitialData(); };
+    document.getElementById('refreshBtn').onclick = () => { loadMapData(); };
     window.addEventListener('resize', renderMap);
 });
 </script>
