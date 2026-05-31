@@ -6,13 +6,14 @@
     <title>마력의 탑 - 실시간 위치 공유</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; margin: 0; }
-        .container { max-width: 800px; margin: 0 auto; }
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 10px; margin: 0; box-sizing: border-box; }
+        .container { max-width: 1100px; margin: 0 auto; }
         h2, h3 { margin-top: 0; color: #fff; }
         
-        .panel { border: 1px solid #333; padding: 15px; margin-bottom: 15px; background: #222; border-radius: 6px; }
+        .panel { border: 1px solid #333; padding: 15px; margin-bottom: 0; background: #222; }
+        .panel-ui { padding: 10px 12px; margin-bottom: 0; }
 
-        .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .tabs { display: flex; gap: 6px; }
         
         .tab-btn { border: none; border-radius: 6px; padding: 9px 14px; background: #333; color: #fff; font-size: 14px; cursor: pointer; }
@@ -24,12 +25,11 @@
         .btn-gray { background: #444; color: #fff; }
         .btn-delete-direct { border: none; border-radius: 4px; background: #dc2626; color: #fff; padding: 4px 8px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 
-        .board-wrap { background: #000; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
-        .image-wrap { position: relative; width: 100%; line-height: 0; cursor: crosshair; touch-action: none; min-height: 300px; }
+        .board-wrap { background: #000; overflow: hidden; width: 100%; }
+        .image-wrap { position: relative; width: 100%; line-height: 0; cursor: crosshair; touch-action: none; }
         .image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
         .pin-layer { position: absolute; inset: 0; pointer-events: none; }
 
-        /* 핀 컨테이너 */
         .pin-wrapper {
             position: absolute;
             transform: translate(-50%, -100%);
@@ -43,7 +43,6 @@
         }
         .pin-wrapper:active { cursor: grabbing; }
 
-        /* 핀 위 이름 라벨 */
         .pin-label {
             background: rgba(0, 0, 0, 0.82);
             color: #fff;
@@ -61,7 +60,6 @@
             box-shadow: 0 1px 4px rgba(0,0,0,0.5);
         }
 
-        /* 핀 원형 */
         .pin-dot {
             width: 18px;
             height: 18px;
@@ -102,22 +100,21 @@
 <body>
 
 <div class="container">
-    <h2 id="mainTitle" style="margin-bottom: 20px;">🏰 마력의 탑 실시간 맵</h2>
-    
-    <div class="board-controls">
-        <div class="tabs" id="tabs">
-            <button class="tab-btn active" data-id="floor1">1층</button>
-            <button class="tab-btn" data-id="floor2">2층</button>
+    <div class="panel panel-ui">
+        <h2 id="mainTitle" style="margin-bottom: 10px; font-size: 16px;">🏰 마력의 탑 실시간 맵</h2>
+        <div class="board-controls">
+            <div class="tabs" id="tabs">
+                <button class="tab-btn active" data-id="floor1">1층</button>
+                <button class="tab-btn" data-id="floor2">2층</button>
+            </div>
+            <button type="button" class="refresh-btn" id="refreshBtn">새로고침</button>
         </div>
-        <button type="button" class="refresh-btn" id="refreshBtn">새로고침</button>
     </div>
 
-    <div class="panel" style="padding: 10px;">
-        <div class="board-wrap">
-            <div class="image-wrap" id="imageWrap">
-                <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="지도 배경">
-                <div class="pin-layer" id="pinLayer"></div>
-            </div>
+    <div class="board-wrap">
+        <div class="image-wrap" id="imageWrap">
+            <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="지도 배경">
+            <div class="pin-layer" id="pinLayer"></div>
         </div>
     </div>
 
@@ -128,7 +125,7 @@
 </div>
 
 <div class="modal-backdrop" id="createModalBackdrop">
-    <div class="modal">
+    <div class="modal" id="createModal">
         <h3>핀 등록</h3>
         <div class="form-row"><label>이름 :</label><input type="text" id="pinName" placeholder="이름 입력"></div>
         <div class="form-row"><label>무기 :</label>
@@ -154,7 +151,7 @@
 </div>
 
 <div class="modal-backdrop" id="viewModalBackdrop">
-    <div class="modal">
+    <div class="modal" id="viewModal">
         <h3>핀 정보</h3>
         <div class="form-row"><label>이름 :</label><div class="view-value" id="viewName"></div></div>
         <div class="form-row"><label>무기 :</label><div class="view-value" id="viewWeapon"></div></div>
@@ -206,7 +203,6 @@ window.addEventListener('load', () => {
         }
     }
 
-    // 이름 파싱 헬퍼
     function parsePinDisplay(displayStr) {
         const parts = (displayStr || '').split(' / ');
         const name = parts[0].replace('이름 : ', '').trim() || '무명';
@@ -235,18 +231,15 @@ window.addEventListener('load', () => {
             const displayStr = p.name || '이름 : 무명 / 무기 : 입력 안함';
             const { name, weapon } = parsePinDisplay(displayStr);
 
-            // ── 핀 wrapper (라벨 + 원형 점) ──
             const wrapper = document.createElement('div');
             wrapper.className = 'pin-wrapper';
             wrapper.style.left = (p.x_ratio * 100) + '%';
             wrapper.style.top  = (p.y_ratio * 100) + '%';
 
-            // 이름 라벨
             const label = document.createElement('div');
             label.className = 'pin-label';
             label.textContent = name;
 
-            // 핀 원형
             const dot = document.createElement('div');
             dot.className = 'pin-dot';
 
@@ -254,14 +247,13 @@ window.addEventListener('load', () => {
             wrapper.appendChild(dot);
 
             // ── 드래그 / 클릭 처리 ──
-            let isDragging = false;
             let dragMoved = false;
 
             const handleDragStart = (e) => {
-                e.preventDefault();
+                // 버블링 차단: 맵 클릭 이벤트로 전파되지 않도록
                 e.stopPropagation();
+                e.preventDefault();
 
-                isDragging = true;
                 dragMoved = false;
 
                 const isTouch = e.type === 'touchstart';
@@ -271,17 +263,26 @@ window.addEventListener('load', () => {
                 const startXRatio = p.x_ratio;
                 const startYRatio = p.y_ratio;
 
-                const onMove = (moveEv) => {
-                    const clientX = isTouch ? moveEv.touches[0].clientX : moveEv.clientX;
-                    const clientY = isTouch ? moveEv.touches[0].clientY : moveEv.clientY;
-                    const rect = img.getBoundingClientRect();
-                    const nx = Math.max(0, Math.min(clientX - rect.left, rect.width));
-                    const ny = Math.max(0, Math.min(clientY - rect.top,  rect.height));
+                const getXY = (ev) => {
+                    if (isTouch) {
+                        const t = ev.touches?.[0] || ev.changedTouches?.[0];
+                        return { x: t.clientX, y: t.clientY };
+                    }
+                    return { x: ev.clientX, y: ev.clientY };
+                };
 
-                    // 3px 이상 움직여야 드래그로 간주
-                    const dxPx = (p.x_ratio - nx / rect.width) * rect.width;
-                    const dyPx = (p.y_ratio - ny / rect.height) * rect.height;
-                    if (Math.sqrt(dxPx*dxPx + dyPx*dyPx) > 3) dragMoved = true;
+                const startPos = getXY(e);
+
+                const onMove = (moveEv) => {
+                    moveEv.preventDefault();
+                    const { x: cx, y: cy } = getXY(moveEv);
+                    const rect = img.getBoundingClientRect();
+                    const nx = Math.max(0, Math.min(cx - rect.left, rect.width));
+                    const ny = Math.max(0, Math.min(cy - rect.top,  rect.height));
+
+                    const dxPx = cx - startPos.x;
+                    const dyPx = cy - startPos.y;
+                    if (Math.sqrt(dxPx*dxPx + dyPx*dyPx) > 2) dragMoved = true;
 
                     if (dragMoved) {
                         wrapper.style.left = (nx / rect.width * 100) + '%';
@@ -292,22 +293,21 @@ window.addEventListener('load', () => {
                 const onUp = async (upEv) => {
                     document.removeEventListener(moveEvent, onMove);
                     document.removeEventListener(upEvent, onUp);
-                    isDragging = false;
 
                     if (dragMoved) {
-                        const clientX = isTouch ? upEv.changedTouches[0].clientX : upEv.clientX;
-                        const clientY = isTouch ? upEv.changedTouches[0].clientY : upEv.clientY;
+                        // 드래그 완료 → 위치 업데이트
+                        const { x: cx, y: cy } = getXY(upEv);
                         const rect = img.getBoundingClientRect();
-                        let fx = Math.max(0, Math.min((clientX - rect.left) / rect.width, 1));
-                        let fy = Math.max(0, Math.min((clientY - rect.top)  / rect.height, 1));
+                        let fx = Math.max(0, Math.min((cx - rect.left) / rect.width, 1));
+                        let fy = Math.max(0, Math.min((cy - rect.top)  / rect.height, 1));
 
-                        if (Math.abs(startXRatio - fx) > 0.01 || Math.abs(startYRatio - fy) > 0.01) {
+                        if (Math.abs(startXRatio - fx) > 0.001 || Math.abs(startYRatio - fy) > 0.001) {
                             await supabaseClient.from(PINS_TBL).update({ x_ratio: fx, y_ratio: fy }).eq('id', p.id);
                         } else {
                             loadMapData();
                         }
                     } else {
-                        // 클릭 → 정보 모달
+                        // 클릭 → 정보 모달 오픈
                         selectedPin = p;
                         document.getElementById('viewName').textContent   = name;
                         document.getElementById('viewWeapon').textContent = weapon;
@@ -331,36 +331,62 @@ window.addEventListener('load', () => {
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-delete-direct';
             delBtn.textContent = '삭제';
-            delBtn.onclick = () => window.deletePin(p.id);
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePin(p.id);
+            });
             item.appendChild(delBtn);
             list.appendChild(item);
         });
     }
 
-    window.deletePin = async (id) => {
+    async function deletePin(id) {
         await supabaseClient.from(PINS_TBL).delete().eq('id', id);
         loadMapData();
-    };
+    }
 
-    // 모달 외부 클릭 닫기
-    document.querySelectorAll('.modal-backdrop').forEach(m =>
-        m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; }
-    );
-    document.getElementById('cancelCreateBtn').onclick = () =>
+    // ── 모달 외부(backdrop) 클릭 시 닫기 ──
+    // 모달 내부 클릭은 backdrop으로 버블링되지 않도록 차단
+    document.getElementById('createModal').addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('viewModal').addEventListener('click', (e) => e.stopPropagation());
+
+    document.getElementById('createModalBackdrop').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('createModalBackdrop')) {
+            document.getElementById('createModalBackdrop').style.display = 'none';
+        }
+    });
+    document.getElementById('viewModalBackdrop').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('viewModalBackdrop')) {
+            document.getElementById('viewModalBackdrop').style.display = 'none';
+        }
+    });
+
+    document.getElementById('cancelCreateBtn').addEventListener('click', () => {
         document.getElementById('createModalBackdrop').style.display = 'none';
-    document.getElementById('closeViewBtn').onclick = () =>
+    });
+    document.getElementById('closeViewBtn').addEventListener('click', () => {
         document.getElementById('viewModalBackdrop').style.display = 'none';
+        selectedPin = null;
+    });
+
+    // ── 삭제 버튼 ──
+    document.getElementById('deleteBtn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!selectedPin) return;
+        const id = selectedPin.id;
+        selectedPin = null;
+        document.getElementById('viewModalBackdrop').style.display = 'none';
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData();
+    });
 
     // ── 맵 클릭 → 핀 등록 ──
-    // mousedown/touchstart 시 좌표 저장, click(mouseup) 시 등록 모달 오픈
     let mapClickStart = null;
 
-    const onMapPointerDown = (e) => {
-        // 핀 위를 클릭한 경우 무시
-        if (e.target !== document.getElementById('bgImage') &&
-            e.target !== document.getElementById('imageWrap') &&
-            e.target !== document.getElementById('pinLayer')) return;
+    const MAP_TARGETS = ['bgImage', 'imageWrap', 'pinLayer'];
 
+    const onMapPointerDown = (e) => {
+        if (!MAP_TARGETS.includes(e.target.id)) return;
         const isTouch = e.type === 'touchstart';
         const clientX = isTouch ? e.touches[0].clientX : e.clientX;
         const clientY = isTouch ? e.touches[0].clientY : e.clientY;
@@ -369,9 +395,7 @@ window.addEventListener('load', () => {
 
     const onMapPointerUp = (e) => {
         if (!mapClickStart) return;
-        if (e.target !== document.getElementById('bgImage') &&
-            e.target !== document.getElementById('imageWrap') &&
-            e.target !== document.getElementById('pinLayer')) {
+        if (!MAP_TARGETS.includes(e.target.id)) {
             mapClickStart = null;
             return;
         }
@@ -384,7 +408,6 @@ window.addEventListener('load', () => {
         const dy = clientY - mapClickStart.y;
         mapClickStart = null;
 
-        // 5px 이내 이동만 클릭으로 간주
         if (Math.sqrt(dx*dx + dy*dy) > 5) return;
 
         const img = document.getElementById('bgImage');
@@ -406,7 +429,7 @@ window.addEventListener('load', () => {
     wrap.addEventListener('touchend',   onMapPointerUp);
 
     // 핀 저장
-    document.getElementById('saveBtn').onclick = async () => {
+    document.getElementById('saveBtn').addEventListener('click', async () => {
         if (!pendingPoint) return;
         const nameVal   = document.getElementById('pinName').value.trim() || '무명';
         const weaponVal = document.getElementById('pinWeapon').value;
@@ -418,23 +441,14 @@ window.addEventListener('load', () => {
         });
         document.getElementById('createModalBackdrop').style.display = 'none';
         loadMapData();
-    };
+    });
 
-    // 엔터 키로 저장
     document.getElementById('pinName').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') document.getElementById('saveBtn').click();
     });
 
-    // 핀 정보 모달 삭제
-    document.getElementById('deleteBtn').onclick = async () => {
-        if (!selectedPin) return;
-        await supabaseClient.from(PINS_TBL).delete().eq('id', selectedPin.id);
-        document.getElementById('viewModalBackdrop').style.display = 'none';
-        loadMapData();
-    };
-
     // 탭 전환
-    document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (e) => {
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         e.target.classList.add('active');
         currentBoard = e.target.dataset.id;
@@ -444,9 +458,9 @@ window.addEventListener('load', () => {
                 : 'https://i.ibb.co/MD9V69Vm/2.png';
         document.getElementById('bgImage').onload = renderMap;
         renderMap();
-    });
+    }));
 
-    document.getElementById('refreshBtn').onclick = () => loadMapData();
+    document.getElementById('refreshBtn').addEventListener('click', () => loadMapData());
     window.addEventListener('resize', renderMap);
 });
 </script>
