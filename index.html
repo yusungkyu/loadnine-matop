@@ -60,12 +60,13 @@
             box-shadow: 0 1px 4px rgba(0,0,0,0.5);
         }
 
+        /* ✅ 핀 크기 30% 축소 (18px → 13px), 색상 노란색으로 변경 */
         .pin-dot {
-            width: 18px;
-            height: 18px;
+            width: 13px;
+            height: 13px;
             border: 2px solid #fff;
             border-radius: 50%;
-            background: #dc2626;
+            background: #facc15;
             box-shadow: 0 2px 6px rgba(0,0,0,0.5);
             animation: blink-effect 0.5s infinite;
             flex-shrink: 0;
@@ -246,11 +247,9 @@ window.addEventListener('load', () => {
             wrapper.appendChild(label);
             wrapper.appendChild(dot);
 
-            // ── 드래그 / 클릭 처리 ──
             let dragMoved = false;
 
             const handleDragStart = (e) => {
-                // 버블링 차단: 맵 클릭 이벤트로 전파되지 않도록
                 e.stopPropagation();
                 e.preventDefault();
 
@@ -295,7 +294,6 @@ window.addEventListener('load', () => {
                     document.removeEventListener(upEvent, onUp);
 
                     if (dragMoved) {
-                        // 드래그 완료 → 위치 업데이트
                         const { x: cx, y: cy } = getXY(upEv);
                         const rect = img.getBoundingClientRect();
                         let fx = Math.max(0, Math.min((cx - rect.left) / rect.width, 1));
@@ -307,7 +305,6 @@ window.addEventListener('load', () => {
                             loadMapData();
                         }
                     } else {
-                        // 클릭 → 정보 모달 오픈
                         selectedPin = p;
                         document.getElementById('viewName').textContent   = name;
                         document.getElementById('viewWeapon').textContent = weapon;
@@ -324,7 +321,6 @@ window.addEventListener('load', () => {
 
             layer.appendChild(wrapper);
 
-            // 목록 아이템
             const item = document.createElement('div');
             item.className = 'pin-item';
             item.innerHTML = `<span>${i+1}. ${displayStr}</span>`;
@@ -345,8 +341,6 @@ window.addEventListener('load', () => {
         loadMapData();
     }
 
-    // ── 모달 외부(backdrop) 클릭 시 닫기 ──
-    // 모달 내부 클릭은 backdrop으로 버블링되지 않도록 차단
     document.getElementById('createModal').addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('viewModal').addEventListener('click', (e) => e.stopPropagation());
 
@@ -369,7 +363,6 @@ window.addEventListener('load', () => {
         selectedPin = null;
     });
 
-    // ── 삭제 버튼 ──
     document.getElementById('deleteBtn').addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!selectedPin) return;
@@ -380,7 +373,6 @@ window.addEventListener('load', () => {
         loadMapData();
     });
 
-    // ── 맵 클릭 → 핀 등록 ──
     let mapClickStart = null;
 
     const MAP_TARGETS = ['bgImage', 'imageWrap', 'pinLayer'];
@@ -428,7 +420,6 @@ window.addEventListener('load', () => {
     wrap.addEventListener('mouseup',    onMapPointerUp);
     wrap.addEventListener('touchend',   onMapPointerUp);
 
-    // 핀 저장
     document.getElementById('saveBtn').addEventListener('click', async () => {
         if (!pendingPoint) return;
         const nameVal   = document.getElementById('pinName').value.trim() || '무명';
@@ -447,7 +438,6 @@ window.addEventListener('load', () => {
         if (e.key === 'Enter') document.getElementById('saveBtn').click();
     });
 
-    // 탭 전환
     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (e) => {
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         e.target.classList.add('active');
