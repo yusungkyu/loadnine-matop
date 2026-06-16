@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마력의 탑 - 실시간 위치 공유</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #1a1a1a; color: #fff; padding: 10px; margin: 0; box-sizing: border-box; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h2, h3 { margin-top: 0; color: #fff; }
+        
+        .panel { border: 1px solid #333; padding: 15px; margin-bottom: 0; background: #222; }
+        .panel-ui { padding: 10px 12px; margin-bottom: 0; }
+
+        .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .tabs { display: flex; gap: 6px; }
+        
+        .tab-btn { border: none; border-radius: 6px; padding: 9px 14px; background: #333; color: #fff; font-size: 14px; cursor: pointer; }
+        .tab-btn.active { background: #2563eb; font-weight: bold; }
+        .refresh-btn { border: none; border-radius: 6px; padding: 9px 14px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
+        .btn { border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+        .btn-blue { background: #2563eb; color: #fff; }
+        .btn-red { background: #dc2626; color: #fff; margin-right: auto; }
+        .btn-gray { background: #444; color: #fff; }
+        .btn-delete-direct { border: none; border-radius: 4px; background: #dc2626; color: #fff; padding: 4px 8px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+
+        .board-wrap { background: #000; overflow: hidden; width: 100%; }
+        .image-wrap { position: relative; width: 100%; line-height: 0; cursor: crosshair; touch-action: none; }
+        .image-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+        .pin-layer { position: absolute; inset: 0; pointer-events: none; }
+
+        .pin-wrapper {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            touch-action: none;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: grab;
+        }
+        .pin-wrapper:active { cursor: grabbing; }
+
+        .pin-label {
+            background: rgba(0, 0, 0, 0.82);
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 7px;
+            border-radius: 10px;
+            white-space: nowrap;
+            margin-bottom: 3px;
+            border: 1px solid rgba(255,255,255,0.18);
+            max-width: 160px;
+            letter-spacing: 0.01em;
+            pointer-events: none;
+            user-select: none;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+        }
+
+        .pin-dot {
+            width: 13px;
+            height: 13px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            background: #facc15;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            animation: blink-effect 0.5s infinite;
+            flex-shrink: 0;
+        }
+        .pin-wrapper:active .pin-dot {
+            animation: none;
+            opacity: 0.9;
+            transform: scale(1.2);
+        }
+
+        @keyframes blink-effect {
+            0%   { opacity: 1;   transform: scale(1);   }
+            50%  { opacity: 0.4; transform: scale(1.1); }
+            100% { opacity: 1;   transform: scale(1);   }
+        }
+
+        .pin-list { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
+        .pin-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; gap: 10px; font-size: 13px; }
+        .pin-item:last-child { border-bottom: none; }
+        .pin-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 1000; padding: 16px; }
+        .modal { width: 100%; max-width: 340px; background: #222; border: 1px solid #333; border-radius: 6px; padding: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.5); color: #fff; }
+        .modal h3 { margin: 0 0 12px 0; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 6px; }
+        .form-row { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 6px; margin-bottom: 10px; }
+        .form-row label { font-size: 13px; font-weight: bold; color: #ccc; }
+        .form-row input, .form-row select { width: 100%; padding: 8px; font-size: 14px; border: 1px solid #444; border-radius: 4px; background: #333; color: #fff; box-sizing: border-box; }
+        .view-value { padding: 8px; border: 1px solid #444; border-radius: 4px; background: #2b2b2b; font-size: 13px; color: #a3be8c; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+        /* 🔄 실시간 통합 조 편성표 및 로테이션 UI 스타일 */
+        .team-panel { margin-bottom: 12px; border-bottom: none; }
+        .team-header { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .badge { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .badge-date { color: #a3be8c; border: 1px solid #a3be8c; background: rgba(163, 190, 140, 0.1); }
+        .badge-team { color: #facc15; border: 1px solid #facc15; background: rgba(250, 204, 21, 0.15); }
+
+        .team-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        @media (max-width: 600px) { .team-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        .team-box { background: #222; border: 1px solid #444; border-radius: 6px; padding: 10px; text-align: center; transition: all 0.3s; }
+        .team-box h4 { margin: 0 0 10px 0; color: #ccc; font-size: 14px; }
+        
+        .team-box.active-team { border: 2px solid #facc15; background: #2a2a15; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(250,204,21,0.2); }
+        .team-box.active-team h4 { color: #facc15; font-weight: bold; }
+
+        .team-box input { 
+            width: 100%; box-sizing: border-box; background: #111; color: #fff; 
+            border: 1px solid #333; padding: 6px; margin-bottom: 6px; 
+            border-radius: 4px; font-size: 12px; text-align: center; 
+        }
+        .team-box input:last-child { margin-bottom: 0; }
+        .team-box input:focus { outline: none; border-color: #2563eb; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel panel-ui">
+        <h2 id="mainTitle" style="margin-bottom: 10px; font-size: 16px;">🏰 마력의 탑 실시간 맵</h2>
+        <div class="board-controls">
+            <div class="tabs" id="tabs">
+                <button class="tab-btn active" data-id="floor1">1층</button>
+                <button class="tab-btn" data-id="floor2">2층</button>
+            </div>
+            <button type="button" class="refresh-btn" id="refreshBtn">새로고침</button>
+        </div>
+    </div>
+
+    <div class="panel team-panel">
+        <div class="team-header">
+            <div class="badge badge-date" id="dateBadge">📅 0000년 00월 00일</div>
+            <div class="badge badge-team" id="todayTeamBadge">🔄 오늘의 담당: 계산 중...</div>
+        </div>
+        <div class="team-grid">
+            <div class="team-box" id="teamBox0">
+                <h4>1조</h4>
+                <input type="text" data-idx="0" placeholder="조원 1">
+                <input type="text" data-idx="1" placeholder="조원 2">
+                <input type="text" data-idx="2" placeholder="조원 3">
+                <input type="text" data-idx="3" placeholder="조원 4">
+            </div>
+            <div class="team-box" id="teamBox1">
+                <h4>2조</h4>
+                <input type="text" data-idx="4" placeholder="조원 1">
+                <input type="text" data-idx="5" placeholder="조원 2">
+                <input type="text" data-idx="6" placeholder="조원 3">
+                <input type="text" data-idx="7" placeholder="조원 4">
+            </div>
+            <div class="team-box" id="teamBox2">
+                <h4>3조</h4>
+                <input type="text" data-idx="8" placeholder="조원 1">
+                <input type="text" data-idx="9" placeholder="조원 2">
+                <input type="text" data-idx="10" placeholder="조원 3">
+                <input type="text" data-idx="11" placeholder="조원 4">
+            </div>
+            <div class="team-box" id="teamBox3">
+                <h4>4조</h4>
+                <input type="text" data-idx="12" placeholder="조원 1">
+                <input type="text" data-idx="13" placeholder="조원 2">
+                <input type="text" data-idx="14" placeholder="조원 3">
+                <input type="text" data-idx="15" placeholder="조원 4">
+            </div>
+        </div>
+    </div>
+
+    <div class="board-wrap">
+        <div class="image-wrap" id="imageWrap">
+            <img id="bgImage" src="https://i.ibb.co/0RST75vn/1.png" alt="지도 배경">
+            <div class="pin-layer" id="pinLayer"></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3 id="listTitle">📍 1층 실시간 위치 목록</h3>
+        <div class="pin-list" id="pinList"></div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="createModalBackdrop">
+    <div class="modal" id="createModal">
+        <h3>핀 등록</h3>
+        <div class="form-row"><label>이름 :</label><input type="text" id="pinName" placeholder="이름 입력"></div>
+        <div class="form-row"><label>무기 :</label>
+            <select id="pinWeapon">
+                <option value="입력 안함">입력 안함</option>
+                <option value="검과방패">검과방패</option>
+                <option value="전투봉">전투봉</option>
+                <option value="활">활</option>
+                <option value="석궁">석궁</option>
+                <option value="지팡이">지팡이</option>
+                <option value="사이드">사이드</option>
+                <option value="전투방패">전투방패</option>
+                <option value="단검">단검</option>
+                <option value="대검">대검</option>
+                <option value="맨손">맨손</option>
+            </select>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-gray" id="cancelCreateBtn">취소</button>
+            <button class="btn btn-blue" id="saveBtn">저장</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="viewModalBackdrop">
+    <div class="modal" id="viewModal">
+        <h3>핀 정보</h3>
+        <div class="form-row"><label>이름 :</label><div class="view-value" id="viewName"></div></div>
+        <div class="form-row"><label>무기 :</label><div class="view-value" id="viewWeapon"></div></div>
+        <div class="modal-buttons">
+            <button class="btn btn-red" id="deleteBtn">삭제</button>
+            <button class="btn btn-gray" id="closeViewBtn">닫기</button>
+        </div>
+    </div>
+</div>
+
+<script>
+window.addEventListener('load', () => {
+    const SUPABASE_URL = 'https://fmsjpwhuwsczhcjnhycg.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2pwd2h1d3Njemhjam5oeWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTI0NjgsImV4cCI6MjA5NTU2ODQ2OH0.vb_-H7xVvcs0N-S2bf6iK7ZH6ryLxSl6uNhxHol-d5c';
+    const PINS_TBL = 'pins_matop';
+    const TEAMS_TBL = 'matop_teams'; // 조 편성표 테이블 명칭 추가
+
+    let supabaseClient;
+    let currentBoard = 'floor1';
+    let pins = [];
+    let pendingPoint = null;
+    let selectedPin = null;
+
+    try {
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            initApp();
+        } else {
+            throw new Error('Supabase 라이브러리 로딩에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('데이터베이스 연결 실패: ' + error.message);
+        return;
+    }
+
+    function initApp() {
+        loadMapData();
+        initRotationAndTeams(); // 조 편성 및 로테이션 시스템 구동
+        
+        // 핀 동기화 채널 구독
+        supabaseClient.channel('map-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: PINS_TBL }, () => loadMapData())
+            .subscribe();
+    }
+
+    // 🔄 실시간 공유 조 편성표 및 자정 자동 로테이션 시스템 함수
+    async function initRotationAndTeams() {
+        const teamInputs = document.querySelectorAll('.team-box input');
+        
+        // 1. Supabase에서 초기 데이터 수신
+        async function loadTeamData() {
+            try {
+                const { data, error } = await supabaseClient.from(TEAMS_TBL).select('*').order('idx', { ascending: true });
+                if (error) throw error;
+                if (data) {
+                    data.forEach(row => {
+                        const input = document.querySelector(`.team-box input[data-idx="${row.idx}"]`);
+                        if (input) input.value = row.member_name || '';
+                    });
+                }
+            } catch (e) {
+                console.error('팀 데이터 로딩 실패:', e.message);
+            }
+        }
+        
+        loadTeamData();
+
+        // 2. 다른 사용자가 데이터 바꿨을 때 실시간 갱신 수신 (내가 편집 중이 아닐 때만 업데이트)
+        supabaseClient.channel('team-changes')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: TEAMS_TBL }, (payload) => {
+                const updatedRow = payload.new;
+                const input = document.querySelector(`.team-box input[data-idx="${updatedRow.idx}"]`);
+                if (input && document.activeElement !== input) {
+                    input.value = updatedRow.member_name || '';
+                }
+            })
+            .subscribe();
+
+        // 3. 입력 칸 포커스를 벗어나거나(change) Enter를 눌렀을 때 Supabase로 실시간 업로드
+        teamInputs.forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const idx = parseInt(e.target.dataset.idx);
+                const val = e.target.value.trim();
+                try {
+                    await supabaseClient.from(TEAMS_TBL).upsert({ idx: idx, member_name: val });
+                } catch (err) {
+                    console.error('팀원 저장 실패:', err);
+                }
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') e.target.blur(); // 포커스를 아웃시키며 change 이벤트를 발생시킴
+            });
+        });
+
+        // 4. 자정(12시) 기준 자동 날짜 및 조 로테이션 계산 로직
+        function updateRotationLogic() {
+            const now = new Date();
+            // 한국 시간 기준(KST)으로 시간 계산 보정
+            const kstMs = now.getTime() + (now.getTimezoneOffset() * 60000) + (9 * 3600000);
+            const kstDate = new Date(kstMs);
+            
+            const y = kstDate.getFullYear();
+            const m = kstDate.getMonth() + 1;
+            const d = kstDate.getDate();
+            
+            // 하루 단위 경과 일수 계산 (자정에 정수 값이 무조건 변경됨)
+            const kstDays = Math.floor(kstMs / 86400000);
+            
+            const currentTeamIndex = kstDays % 4; // 0=1조, 1=2조, 2=3조, 3=4조
+            const teams = ['1조', '2조', '3조', '4조'];
+            
+            const dateBadge = document.getElementById('dateBadge');
+            const todayTeamBadge = document.getElementById('todayTeamBadge');
+            
+            if (dateBadge) dateBadge.innerText = `📅 ${y}년 ${m}월 ${d}일`;
+            if (todayTeamBadge) todayTeamBadge.innerText = `🔄 오늘의 담당: ${teams[currentTeamIndex]}`;
+            
+            // 오늘 담당조 카드판 테두리 테마 변경 하이라이트
+            document.querySelectorAll('.team-box').forEach((box, i) => {
+                if (i === currentTeamIndex) {
+                    box.classList.add('active-team');
+                } else {
+                    box.classList.remove('active-team');
+                }
+            });
+        }
+        
+        updateRotationLogic();
+        setInterval(updateRotationLogic, 30000); // 30초마다 자정이 지났는지 정밀 체크 (새로고침 불필요)
+    }
+
+    async function loadMapData() {
+        try {
+            const { data: p } = await supabaseClient.from(PINS_TBL).select('*').order('created_at', { ascending: true });
+            pins = p || [];
+            renderMap();
+        } catch (e) {
+            console.error("데이터 동기화 실패:", e);
+        }
+    }
+
+    function parsePinDisplay(displayStr) {
+        const parts = (displayStr || '').split(' / ');
+        const name = parts[0].replace('이름 : ', '').trim() || '무명';
+        const weapon = (parts[1] || '').replace('무기 : ', '').trim() || '입력 안함';
+        return { name, weapon };
+    }
+
+    function renderMap() {
+        const list = document.getElementById('pinList');
+        const layer = document.getElementById('pinLayer');
+        const img = document.getElementById('bgImage');
+
+        document.getElementById('listTitle').textContent =
+            currentBoard === 'floor1' ? '📍 1층 실시간 위치 목록' : '📍 2층 실시간 위치 목록';
+
+        layer.innerHTML = '';
+        list.innerHTML = '';
+
+        const filtered = pins.filter(p => p.board_id === currentBoard);
+
+        if (filtered.length === 0) {
+            list.innerHTML = '<div style="color: #6b7280; font-size: 13px; padding: 6px 0;">등록된 실시간 위치가 없습니다.</div>';
+        }
+
+        filtered.forEach((p, i) => {
+            const displayStr = p.name || '이름 : 무명 / 무기 : 입력 안함';
+            const { name, weapon } = parsePinDisplay(displayStr);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pin-wrapper';
+            wrapper.style.left = (p.x_ratio * 100) + '%';
+            wrapper.style.top  = (p.y_ratio * 100) + '%';
+
+            const label = document.createElement('div');
+            label.className = 'pin-label';
+            label.textContent = name;
+
+            const dot = document.createElement('div');
+            dot.className = 'pin-dot';
+
+            wrapper.appendChild(label);
+            wrapper.appendChild(dot);
+
+            let dragMoved = false;
+
+            const handleDragStart = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+
+                dragMoved = false;
+
+                const isTouch = e.type === 'touchstart';
+                const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+                const upEvent   = isTouch ? 'touchend'   : 'mouseup';
+
+                const startXRatio = p.x_ratio;
+                const startYRatio = p.y_ratio;
+
+                const getXY = (ev) => {
+                    if (isTouch) {
+                        const t = ev.touches?.[0] || ev.changedTouches?.[0];
+                        return { x: t.clientX, y: t.clientY };
+                    }
+                    return { x: ev.clientX, y: ev.clientY };
+                };
+
+                const startPos = getXY(e);
+
+                const onMove = (moveEv) => {
+                    moveEv.preventDefault();
+                    const { x: cx, y: cy } = getXY(moveEv);
+                    const rect = img.getBoundingClientRect();
+                    const nx = Math.max(0, Math.min(cx - rect.left, rect.width));
+                    const ny = Math.max(0, Math.min(cy - rect.top,  rect.height));
+
+                    const dxPx = cx - startPos.x;
+                    const dyPx = cy - startPos.y;
+                    if (Math.sqrt(dxPx*dxPx + dyPx*dyPx) > 2) dragMoved = true;
+
+                    if (dragMoved) {
+                        wrapper.style.left = (nx / rect.width * 100) + '%';
+                        wrapper.style.top  = (ny / rect.height * 100) + '%';
+                    }
+                };
+
+                const onUp = async (upEv) => {
+                    document.removeEventListener(moveEvent, onMove);
+                    document.removeEventListener(upEvent, onUp);
+
+                    if (dragMoved) {
+                        const { x: cx, y: cy } = getXY(upEv);
+                        const rect = img.getBoundingClientRect();
+                        let fx = Math.max(0, Math.min((cx - rect.left) / rect.width, 1));
+                        let fy = Math.max(0, Math.min((cy - rect.top)  / rect.height, 1));
+
+                        if (Math.abs(startXRatio - fx) > 0.001 || Math.abs(startYRatio - fy) > 0.001) {
+                            await supabaseClient.from(PINS_TBL).update({ x_ratio: fx, y_ratio: fy }).eq('id', p.id);
+                        } else {
+                            loadMapData();
+                        }
+                    } else {
+                        selectedPin = p;
+                        document.getElementById('viewName').textContent   = name;
+                        document.getElementById('viewWeapon').textContent = weapon;
+                        document.getElementById('viewModalBackdrop').style.display = 'flex';
+                    }
+                };
+
+                document.addEventListener(moveEvent, onMove, { passive: false });
+                document.addEventListener(upEvent, onUp);
+            };
+
+            wrapper.addEventListener('mousedown',  handleDragStart);
+            wrapper.addEventListener('touchstart', handleDragStart, { passive: false });
+
+            layer.appendChild(wrapper);
+
+            const item = document.createElement('div');
+            item.className = 'pin-item';
+            item.innerHTML = `<span>${i+1}. ${displayStr}</span>`;
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-delete-direct';
+            delBtn.textContent = '삭제';
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePin(p.id);
+            });
+            item.appendChild(delBtn);
+            list.appendChild(item);
+        });
+    }
+
+    async function deletePin(id) {
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData();
+    }
+
+    document.getElementById('createModal').addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('viewModal').addEventListener('click', (e) => e.stopPropagation());
+
+    document.getElementById('createModalBackdrop').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('createModalBackdrop')) {
+            document.getElementById('createModalBackdrop').style.display = 'none';
+        }
+    });
+    document.getElementById('viewModalBackdrop').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('viewModalBackdrop')) {
+            document.getElementById('viewModalBackdrop').style.display = 'none';
+        }
+    });
+
+    document.getElementById('cancelCreateBtn').addEventListener('click', () => {
+        document.getElementById('createModalBackdrop').style.display = 'none';
+    });
+    document.getElementById('closeViewBtn').addEventListener('click', () => {
+        document.getElementById('viewModalBackdrop').style.display = 'none';
+        selectedPin = null;
+    });
+
+    document.getElementById('deleteBtn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!selectedPin) return;
+        const id = selectedPin.id;
+        selectedPin = null;
+        document.getElementById('viewModalBackdrop').style.display = 'none';
+        await supabaseClient.from(PINS_TBL).delete().eq('id', id);
+        loadMapData();
+    });
+
+    let mapClickStart = null;
+
+    const MAP_TARGETS = ['bgImage', 'imageWrap', 'pinLayer'];
+
+    const onMapPointerDown = (e) => {
+        if (!MAP_TARGETS.includes(e.target.id)) return;
+        const isTouch = e.type === 'touchstart';
+        const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+        const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+        mapClickStart = { x: clientX, y: clientY };
+    };
+
+    const onMapPointerUp = (e) => {
+        if (!mapClickStart) return;
+        if (!MAP_TARGETS.includes(e.target.id)) {
+            mapClickStart = null;
+            return;
+        }
+
+        const isTouch = e.type === 'touchend';
+        const clientX = isTouch ? e.changedTouches[0].clientX : e.clientX;
+        const clientY = isTouch ? e.changedTouches[0].clientY : e.clientY;
+
+        const dx = clientX - mapClickStart.x;
+        const dy = clientY - mapClickStart.y;
+        mapClickStart = null;
+
+        if (Math.sqrt(dx*dx + dy*dy) > 5) return;
+
+        const img = document.getElementById('bgImage');
+        const rect = img.getBoundingClientRect();
+        pendingPoint = {
+            x: (clientX - rect.left) / rect.width,
+            y: (clientY - rect.top)  / rect.height
+        };
+        document.getElementById('pinName').value = '';
+        document.getElementById('pinWeapon').selectedIndex = 0;
+        document.getElementById('createModalBackdrop').style.display = 'flex';
+        setTimeout(() => document.getElementById('pinName').focus(), 50);
+    };
+
+    const wrap = document.getElementById('imageWrap');
+    wrap.addEventListener('mousedown',  onMapPointerDown);
+    wrap.addEventListener('touchstart', onMapPointerDown, { passive: true });
+    wrap.addEventListener('mouseup',    onMapPointerUp);
+    wrap.addEventListener('touchend',   onMapPointerUp);
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+        if (!pendingPoint) return;
+        const nameVal   = document.getElementById('pinName').value.trim() || '무명';
+        const weaponVal = document.getElementById('pinWeapon').value;
+        await supabaseClient.from(PINS_TBL).insert({
+            board_id: currentBoard,
+            x_ratio: pendingPoint.x,
+            y_ratio: pendingPoint.y,
+            name: `이름 : ${nameVal} / 무기 : ${weaponVal}`
+        });
+        document.getElementById('createModalBackdrop').style.display = 'none';
+        loadMapData();
+    });
+
+    document.getElementById('pinName').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('saveBtn').click();
+    });
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (e) => {
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        e.target.classList.add('active');
+        currentBoard = e.target.dataset.id;
+        document.getElementById('bgImage').src =
+            currentBoard === 'floor1'
+                ? 'https://i.ibb.co/0RST75vn/1.png'
+                : 'https://i.ibb.co/MD9V69Vm/2.png';
+        document.getElementById('bgImage').onload = renderMap;
+        renderMap();
+    }));
+
+    document.getElementById('refreshBtn').addEventListener('click', () => loadMapData());
+    window.addEventListener('resize', renderMap);
+});
+</script>
+</body>
+</html>
